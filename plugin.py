@@ -112,6 +112,8 @@ def get_hmac_plugin(credential_id, salt):
         except:
             send_command('error', ['identity', str(i)], 'Unknown Error!')
 
+    send_command('error', ['identity', str(i)], 'No authenticator found!')
+
 
 def b64encode_no_padding(s):
     return b64encode(s.encode('utf-8') if type(s) == str else s).decode('utf-8').replace('=', '')
