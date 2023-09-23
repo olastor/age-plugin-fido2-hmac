@@ -67,7 +67,7 @@ def fido2_hmac_challenge(device, credential_id, salt, user_interaction):
     allow_list = [{"type": "public-key", "id": credential_id}]
 
     # Prepare parameters for makeCredential
-    challenge = os.random(12)
+    challenge = os.urandom(12)
 
     client = Fido2Client(
         device,
