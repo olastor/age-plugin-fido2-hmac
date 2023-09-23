@@ -13,7 +13,7 @@ from .b64 import b64decode_no_padding
 
 def main():
     parser = argparse.ArgumentParser(
-        prog='ProgramName',
+        prog='age-plugin-fido2-hmac',
         description='What the program does',
         epilog='Text at the bottom of help'
     )
@@ -24,7 +24,8 @@ def main():
     parser.add_argument('-m', '--print-magic-id', action='store_true')
     parser.add_argument('-x', '--extract-identities')
     parser.add_argument('-uv', '--user-verification', default='preferred',
-                        choices=['required', 'preferred', 'discouraged'])
+                        choices=['required', 'preferred', 'discouraged'],
+                        help='Specify how user verification (e.g., via PIN or fingerprint) should be enforced. By default this is preferred as this protects against unauthorized decryptions using the device. If your device does not support user verification, this should be set to "discouraged".')
     parser.add_argument('--hidden-identity', action='store_true')
     parser.add_argument('-v', '--version',
                         action='store_true')  # on/off flag
