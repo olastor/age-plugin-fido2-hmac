@@ -5,6 +5,7 @@ from .device import chose_device_interactively
 from .credential import generate_new_credential
 from .identity import create_identity
 
+
 def main():
     parser = argparse.ArgumentParser(
         prog='ProgramName',
