@@ -1,5 +1,5 @@
 import sys
-from .utils.b64 import b64encode_no_padding
+from .b64 import b64encode_no_padding
 
 
 def send_command(

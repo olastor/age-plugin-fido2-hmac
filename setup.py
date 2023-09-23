@@ -8,5 +8,7 @@ setup(name='age_plugin_fido2_hmac',
       author_email='flyingcircus@example.com',
       license='MIT',
       packages=['age_plugin_fido2_hmac'],
-      scripts=['age-plugin-fido2-hmac=age_plugin_fido2_hmac.cli:main'],
+      entry_points={
+          'console_scripts': ['age-plugin-fido2-hmac=age_plugin_fido2_hmac.cli:main']
+      },
       zip_safe=False)

@@ -1,19 +1,10 @@
 import sys
 import os
 from fido2 import cose
-import sys
-import os
-import argparse
-from time import sleep
-from fido2 import cose
-from fido2.webauthn import UserVerificationRequirement
-from fido2.hid import CtapHidDevice
-from fido2.client import Fido2Client, ClientError, UserInteraction
-from getpass import getpass
-from bech32 import bech32_decode, bech32_encode, convertbits
-from base64 import b64encode, b64decode
-from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+from fido2.client import Fido2Client
 
+from . import FIDO2_RELYING_PARTY
+from .device import CliInteraction
 
 def generate_new_credential(
     device,

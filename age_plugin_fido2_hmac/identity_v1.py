@@ -1,7 +1,12 @@
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-from .ipc import send_command, handle_incoming_data
-from .utils import b64decode_no_padding
+from fido2.client import ClientError
+
 from . import PLUGIN_NAME, MAGIC_IDENTITY, IDENTITY_FORMAT_VERSION
+from .ipc import send_command, handle_incoming_data
+from .b64 import b64decode_no_padding
+from .identity import parse_identity
+from .device import wait_for_devices, PluginInteraction
+from .credential import fido2_hmac_challenge
 
 
 def check_identities_stanzas(identities, stanzas, stanzas_by_file):

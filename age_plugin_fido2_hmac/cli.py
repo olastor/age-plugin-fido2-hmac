@@ -1,6 +1,9 @@
 import argparse
-from age_plugin_fido2_hmac import recipient_v1_phase1, identity_v1_phase1, chose_device_interactively
-
+from .recipient_v1 import recipient_v1_phase1
+from .identity_v1 import identity_v1_phase1
+from .device import chose_device_interactively
+from .credential import generate_new_credential
+from .identity import create_identity
 
 def main():
     parser = argparse.ArgumentParser(
@@ -25,13 +28,8 @@ def main():
             recipient_v1_phase1()
         elif args.age_plugin == 'identity-v1':
             identity_v1_phase1()
-        else:
-            raise 'Not implemented'
     elif args.new_identity:
         device = chose_device_interactively()
-
-        if not device:
-            raise 'No device found'
 
         credential_id = generate_new_credential(
             device, args.user_verification, args.algorithm)

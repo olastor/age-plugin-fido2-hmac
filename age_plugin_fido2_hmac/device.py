@@ -3,7 +3,7 @@ from fido2.hid import CtapHidDevice
 from fido2.client import UserInteraction
 from getpass import getpass
 
-from .. import WAIT_FOR_DEVICE_TIMEOUT
+from . import WAIT_FOR_DEVICE_TIMEOUT
 from .ipc import send_command, handle_incoming_data
 
 
@@ -27,12 +27,12 @@ def chose_device_interactively():
     input_index = int(input("Enter device: ").strip())
 
     if input_index < 0 or input_index >= len(devs):
-        raise 'Invalid device index'
+        raise Exception('Invalid device index')
 
     if input(
         'You have selected: %s. Confirm? [yY]' %
             (devs[input_index][1])).lower().strip() != 'y':
-        raise 'Failed confirmation'
+        raise Exception('Failed confirmation')
 
     return devs[input_index][0]
 

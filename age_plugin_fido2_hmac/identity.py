@@ -1,5 +1,5 @@
 from bech32 import bech32_encode, bech32_decode, convertbits
-from age_plugin_fido2_hmac import HRP_IDENTITY, IDENTITY_FORMAT_VERSION
+from . import HRP_IDENTITY, IDENTITY_FORMAT_VERSION
 
 
 def create_identity(credential_id, hidden_identity=False):
