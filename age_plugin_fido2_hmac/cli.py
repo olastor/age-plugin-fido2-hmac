@@ -31,7 +31,7 @@ def main():
                         action='store_true')  # on/off flag
 
     args = parser.parse_args()
-
+    print(create_identity(bytes('fido2-hmac', 'utf-8'), False))
     if args.age_plugin:
         if args.age_plugin == 'recipient-v1':
             recipient_v1_phase1()

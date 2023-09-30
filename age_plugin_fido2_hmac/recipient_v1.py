@@ -12,6 +12,7 @@ from .credential import fido2_hmac_challenge
 
 def recipient_v1_phase1():
     identities = []
+    recipients = []
     file_key = ''
 
     def file_key_callback(metadata, data):
@@ -23,6 +24,10 @@ def recipient_v1_phase1():
             'data-lines': 0,
             'callback': lambda metadata, data: identities.append(metadata[0])
         },
+        'add-recipient': {
+            'data-lines': 0,
+            'callback': lambda metadata, data: recipients.append(metadata[0])
+        },
         'wrap-file-key': {
             'data-lines': 1,
             'callback': file_key_callback
@@ -32,10 +37,10 @@ def recipient_v1_phase1():
         }
     })
 
-    recipient_v1_phase2(identities, file_key)
+    recipient_v1_phase2(recipients, identities, file_key)
 
 
-def recipient_v1_phase2(identities, wrap_file_key: str):
+def recipient_v1_phase2(recipients, identities, wrap_file_key: str):
     for i, identity in enumerate(identities):
         try:
             version, is_hidden_identity, credential_id = parse_identity(
