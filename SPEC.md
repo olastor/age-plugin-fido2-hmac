@@ -12,8 +12,8 @@ This plugin implements the C2SP age-plugin specification [[1]](#references)
 
 - Plugin Name: `fido2-hmac`
 - Binary Name: `age-plugin-fido2-hmac`
-- Recipient Prefix: `age1fido2-hmac-`
-- Identity Prefix: `AGE-PLUGIN-FIDO2-HMAC`
+- Recipient Prefix: `age1fido2-hmac`
+- Identity Prefix: `AGE-PLUGIN-FIDO2-HMAC-`
 
 ## Recipients & Identities
 
