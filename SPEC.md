@@ -104,7 +104,7 @@ When trying to create a new recipient/identity, the plugin MUST fail if there ar
 
 After the list of valid recipients/identities has been assembled or whenever a token is required for performing an HMAC challenge, the plugin MUST prompt the user to insert a matching fido2 token if no token is found. If there already are one ore more tokens inserted, the plugin MUST start trying these in any order.
 
-When trying to create an HMAC challenge using a token and a specific credential ID, the fido2 library might raise an error because the combination is wrong ("device not egligible"). This error MUST be ignored if at least one of the tries with different credential IDs succeed, regardless of any file index. If none credential IDs are egligible, an error and a prompt to use a different key MUST be shown to the user.
+When trying to create an HMAC challenge using a token and a specific credential ID, the fido2 library might raise an error because the combination is wrong ("device not egligible"). This error MUST be ignored if at least one of the tries with different credential IDs succeed, regardless of any file index.
 
 Once all wrapping/unwrapping tries with a specific token have been done, the plugin MUST NOT try to use the same token again while it is still inserted. If the user removes it and inserts it again, the plugin MAY stop ignoring this token.
 
