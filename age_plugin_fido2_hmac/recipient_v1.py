@@ -3,13 +3,14 @@ import sys
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from fido2.client import ClientError
 
-from . import PLUGIN_NAME, IDENTITY_FORMAT_VERSION, parse_recipient_or_identity
+from . import PLUGIN_NAME, RECIPIENT_FORMAT_VERSION, IDENTITY_FORMAT_VERSION, parse_recipient_or_identity
 from .ipc import send_command, handle_incoming_data
 from .b64 import b64encode_no_padding, b64decode_no_padding
 from .device import wait_for_devices_plugin, PluginInteraction
 from .credential import fido2_hmac_challenge
 
 DEBUG = 'AGEDEBUG' in os.environ and os.environ['AGEDEBUG'] == 'plugin'
+
 
 def try_wrap_key(file_key, file_index, credential_id, dev, include_credential_id):
     salt = os.urandom(32)
@@ -64,12 +65,11 @@ def try_wrap_key(file_key, file_index, credential_id, dev, include_credential_id
         raise e
 
 
-
 def recipient_v1_phase1():
     identities = []
     recipients = []
 
-    # age currently only excepts a single file key: https://github.com/FiloSottile/age/blob/101cc8676386b0503571a929a88618cae2f0b1cd/plugin/client.go#L113
+    # age currently only accepts a single file key: https://github.com/FiloSottile/age/blob/101cc8676386b0503571a929a88618cae2f0b1cd/plugin/client.go#L113
     # however, the plugin spec allows for multiple
     file_keys = []
 
@@ -103,19 +103,36 @@ def recipient_v1_phase1():
         sys.exit(1)
 
 
-
-def recipient_v1_phase2(recipients, identities, file_keys):
+def check_identities(identities):
     for i, identity in enumerate(identities):
         try:
-            version, is_hidden_identity, credential_id = parse_identity(
-                identity)
+            version, credential_id = parse_recipient_or_identity(identity)
         except BaseException:
             send_command('error', ['identity', str(i)],
                          'Failed to parse identity!')
-
+            sys.exit(1)
         if version != int.from_bytes(IDENTITY_FORMAT_VERSION):
             send_command('error', ['identity', str(i)],
                          'Unsupported version number!')
+            sys.exit(1)
+
+
+def check_recipients(recipients):
+    for i, recipient in enumerate(recipients):
+        try:
+            version, credential_id = parse_recipient_or_identity(recipient)
+        except BaseException:
+            send_command('error', ['recipient', str(i)],
+                         'Failed to parse!')
+            sys.exit(1)
+        if version != int.from_bytes(RECIPIENT_FORMAT_VERSION):
+            send_command('error', ['recipient', str(i)],
+                         'Unsupported version number!')
+            sys.exit(1)
+
+def recipient_v1_phase2(recipients, identities, file_keys):
+    check_identities(identities)
+    check_recipients(recipients)
 
     # these recipients/identities have successfully wrapped all file keys
     finished_identities = set()

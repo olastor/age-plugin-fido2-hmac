@@ -1,6 +1,7 @@
 # spec
 
 Version: 1.0.0
+Status: Draft
 
 This plugin implements the C2SP age-plugin specification [[1]](#references)
 
