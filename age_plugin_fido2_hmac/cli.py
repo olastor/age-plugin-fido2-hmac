@@ -1,13 +1,13 @@
 import sys
 import argparse
+import click
 from os.path import isfile
 
-from . import PLUGIN_NAME, MAGIC_IDENTITY
+from . import PLUGIN_NAME, MAGIC_IDENTITY, create_identity, create_recipient
 from .recipient_v1 import recipient_v1_phase1
 from .identity_v1 import identity_v1_phase1
-from .device import chose_device_interactively
+from .device import wait_for_devices_cli
 from .credential import generate_new_credential
-from .identity import create_identity
 from .b64 import b64decode_no_padding
 
 
@@ -19,7 +19,7 @@ def main():
     )
 
     parser.add_argument('--age-plugin')
-    parser.add_argument('-n', '--new-identity', action='store_true')
+    parser.add_argument('-n', '--new-credential', action='store_true')
     parser.add_argument('-a', '--algorithm')
     parser.add_argument('-m', '--print-magic-id', action='store_true')
     parser.add_argument('-x', '--extract-identities')
@@ -31,21 +31,26 @@ def main():
                         action='store_true')  # on/off flag
 
     args = parser.parse_args()
-    print(create_identity(bytes('fido2-hmac', 'utf-8'), False))
+
     if args.age_plugin:
         if args.age_plugin == 'recipient-v1':
             recipient_v1_phase1()
         elif args.age_plugin == 'identity-v1':
             identity_v1_phase1()
-    elif args.new_identity:
-        device = chose_device_interactively()
+    elif args.new_credential:
+        devs = wait_for_devices_cli()
+
+        if len(devs) > 1:
+            print('Please only insert one fido2 token')
+            sys.exit(1)
 
         credential_id = generate_new_credential(
-            device, args.user_verification, args.algorithm)
+            devs[0], args.user_verification, args.algorithm)
 
-        identity = create_identity(credential_id, args.hidden_identity)
-
-        print(identity)
+        if click.confirm('Do you want to have secret identity?', default=True):
+            print(create_identity(credential_id))
+        else:
+            print(create_recipient(credential_id))
     elif args.print_magic_id:
         print(MAGIC_IDENTITY)
     elif args.extract_identities:

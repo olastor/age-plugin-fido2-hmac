@@ -6,6 +6,7 @@ from fido2.client import Fido2Client
 from . import FIDO2_RELYING_PARTY
 from .device import CliInteraction
 
+
 def generate_new_credential(
     device,
     uv='preferred',

@@ -84,7 +84,7 @@ If an identity is used, the credential ID is omitted:
 3. Generate a random 12 byte `nonce`.
 4. Encrypt the file key provided by age with ChaCha20Poly1305, using `hmac-secret` as key and the previously generated `nonce`.
 
-The resulting ciphertext is passed to age together with the salt and nonce.
+The resulting ciphertext is passed to age in the stanza.
 
 ### Decryption
 
@@ -98,13 +98,15 @@ The resulting ciphertext is passed to age together with the salt and nonce.
 
 ### Creating new recipients/identities
 
-When trying to create a recipient/identity, the plugin MUST fail if there are more than one fido2 tokens inserted.
+When trying to create a new recipient/identity, the plugin MUST fail if there are more than one fido2 tokens inserted.
 
 ### File key wrapping/unwrapping
 
-After the list of valid recipients/identities has been assembled or whenever a token is required for performing an HMAC challenge, the plugin MUST prompt the user to insert a matching fido2 token if none tokens are inserted. If there already are one ore more tokens inserted, the plugin MUST start trying these in any order.
+After the list of valid recipients/identities has been assembled or whenever a token is required for performing an HMAC challenge, the plugin MUST prompt the user to insert a matching fido2 token if no token is found. If there already are one ore more tokens inserted, the plugin MUST start trying these in any order.
 
 When trying to create an HMAC challenge using a token and a specific credential ID, the fido2 library might raise an error because the combination is wrong ("device not egligible"). This error MUST be ignored if at least one of the tries with different credential IDs succeed, regardless of any file index. If none credential IDs are egligible, an error and a prompt to use a different key MUST be shown to the user.
+
+Once all wrapping/unwrapping tries with a specific token have been done, the plugin MUST NOT try to use the same token again while it is still inserted. If the user removes it and inserts it again, the plugin MAY stop ignoring this token.
 
 After a specific file key has been unwrapped, the plugin MUST NOT try to unwrap any more stanzas for the same file. The unwrapped file key is sent to age immediately.
 

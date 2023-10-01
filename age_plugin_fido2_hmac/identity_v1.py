@@ -1,13 +1,16 @@
+import os
+import sys
+from collections import defaultdict
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from fido2.client import ClientError
 
-from . import PLUGIN_NAME, MAGIC_IDENTITY, IDENTITY_FORMAT_VERSION
+from . import PLUGIN_NAME, MAGIC_IDENTITY, IDENTITY_FORMAT_VERSION, parse_recipient_or_identity
 from .ipc import send_command, handle_incoming_data
 from .b64 import b64decode_no_padding
-from .identity import parse_identity
-from .device import wait_for_devices, PluginInteraction
+from .device import wait_for_devices_plugin, PluginInteraction
 from .credential import fido2_hmac_challenge
 
+DEBUG = 'AGEDEBUG' in os.environ and os.environ['AGEDEBUG'] == 'plugin'
 
 def check_identities_stanzas(identities, stanzas, stanzas_by_file):
     # "plugin MUST return errors and MUST NOT attempt to unwrap
@@ -17,7 +20,7 @@ def check_identities_stanzas(identities, stanzas, stanzas_by_file):
             continue
 
         try:
-            version, is_hidden_identity, credential_id = parse_identity(
+            version, credential_id = parse_recipient_or_identity(
                 identity)
             if version != int.from_bytes(IDENTITY_FORMAT_VERSION):
                 send_command(
@@ -27,6 +30,9 @@ def check_identities_stanzas(identities, stanzas, stanzas_by_file):
                     True
                 )
         except Exception as e:
+            if DEBUG:
+                print(e)
+
             send_command(
                 'error',
                 ['identity', str(i)],
@@ -53,6 +59,7 @@ def check_identities_stanzas(identities, stanzas, stanzas_by_file):
 
 
 def try_unwrap_key(stanza_index, stanza, credential_id, dev):
+    file_index = stanza[0][0]
     hmac_secret = None
     salt = b64decode_no_padding(stanza[0][2])
 
@@ -63,17 +70,23 @@ def try_unwrap_key(stanza_index, stanza, credential_id, dev):
         if e.code == ClientError.ERR.DEVICE_INELIGIBLE:
             return None
         else:
+            if DEBUG:
+                print(e)
+
             send_command(
                 'error',
-                ['stanza', stanza[0], stanza_index],
+                ['stanza', file_index, stanza_index],
                 'Unexpected ClientError.',
                 True
             )
             return None
     except Exception as e:
+        if DEBUG:
+            print(e)
+
         send_command(
             'error',
-            ['stanza', stanza[0], stanza_index],
+            ['stanza', file_index, stanza_index],
             'Unexpected Error.',
             True
         )
@@ -91,9 +104,12 @@ def try_unwrap_key(stanza_index, stanza, credential_id, dev):
 
         return file_key
     except Exception as e:
+        if DEBUG:
+            print(e)
+
         send_command(
             'error',
-            ['stanza', stanza[0], stanza_index],
+            ['stanza', file_index, stanza_index],
             'Failed to unwrap key!',
             True
         )
@@ -117,72 +133,85 @@ def identity_v1_phase1():
         }
     })
 
-    identity_v1_phase2(identities, stanzas)
+    try:
+        identity_v1_phase2(identities, stanzas)
+    except Exception as e:
+        if DEBUG:
+            print(e)
+
+        send_command('error', ['internal'], 'Fatal: Unknown Error!', True)
+
+        sys.exit(1)
 
 
 def identity_v1_phase2(identities, stanzas):
-    stanzas_by_file = {}
+    stanzas_by_file = defaultdict(list)
+
+    # group stanzas by their file, but remember the
+    # original index of the order they were received
     for i, stanza in enumerate(stanzas):
         file_index = stanza[0][0]
-        if file_index not in stanzas_by_file:
-            stanzas_by_file[file_index] = []
-
         stanzas_by_file[file_index].append([i, stanza])
 
     check_identities_stanzas(identities, stanzas, stanzas_by_file)
 
-    for file_index, stanza_group in stanzas_by_file.items():
-        for stanza_index, stanza in stanza_group:
-            # plugin MUST ignore unknown stanzas
-            if stanza[0][1] != PLUGIN_NAME:
-                continue
+    finished_files = set()
+    ignored_devs = []
 
-            file_key = None
-            devs = wait_for_devices()
-            for dev in devs:
-                if len(stanza) == 5:
-                    # credential id is public information,
-                    # no need to use identities
-                    cred_id = b64decode_no_padding(stanza[0][4])
-                    file_key = try_unwrap_key(
-                        stanza_index,
-                        stanza,
-                        cred_id,
-                        dev
-                    )
-                else:
-                    # credential id can only be derived from identity,
-                    # so try them all
-                    for i, identity in enumerate(identities):
-                        if identity == MAGIC_IDENTITY:
-                            continue
+    while len(finished_files) < len(stanzas_by_file.keys()):
+        devs = wait_for_devices_plugin(ignored_devs)
+        for dev in devs:
+            for file_index, stanza_group in stanzas_by_file.items():
+                file_key = None
 
-                        version, is_hidden_identity, cred_id = parse_identity(
-                            identity)
+                for stanza_index, stanza in stanza_group:
+                    # plugin MUST ignore unknown stanzas
+                    if stanza[0][1] != PLUGIN_NAME:
+                        continue
 
+                    if len(stanza[0]) == 5:
+                        # credential id is public information,
+                        # no need to use identities
+                        cred_id = b64decode_no_padding(stanza[0][4])
                         file_key = try_unwrap_key(
                             stanza_index,
                             stanza,
                             cred_id,
                             dev
                         )
+                    else:
+                        # credential id can only be derived from identity,
+                        # so try them all
+                        for i, identity in enumerate(identities):
+                            if identity == MAGIC_IDENTITY:
+                                continue
 
-                        if file_key:
-                            break
+                            version, cred_id = parse_recipient_or_identity(
+                                identity)
+
+                            file_key = try_unwrap_key(
+                                stanza_index,
+                                stanza,
+                                cred_id,
+                                dev
+                            )
+
+                    if file_key:
+                        break
 
                 if file_key:
+                    finished_files.add(file_index)
+                    send_command(
+                        'file-key', [
+                            stanza[0][0]
+                        ],
+                        file_key,
+                        True
+                    )
+
+                    # we don't need to try any other stanzas for this file
                     break
 
-            if file_key:
-                send_command(
-                    'file-key', [
-                        stanza[0][0]
-                    ],
-                    file_key,
-                    True
-                )
-
-                # we don't need to try any other stanzas for this file
-                break
+        ignored_devs += devs
 
     send_command('done\n', [], None)

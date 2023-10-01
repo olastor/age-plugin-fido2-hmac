@@ -1,3 +1,4 @@
+import sys
 from time import sleep
 from fido2.hid import CtapHidDevice
 from fido2.client import UserInteraction
@@ -7,39 +8,12 @@ from . import WAIT_FOR_DEVICE_TIMEOUT
 from .ipc import send_command, handle_incoming_data
 
 
-def chose_device_interactively():
-    devs = [
-        (dev,
-         '%s (path=%s, serial=%s)' %
-         (dev.product_name,
-          dev.descriptor.path,
-          dev.serial_number)) for dev in CtapHidDevice.list_devices()]
-
-    if len(devs) == 0:
-        return None
-
-    if len(devs) == 1:
-        return devs[0][0]
-
-    for i, (dev, info) in enumerate(devs):
-        print('[%i]: %s' % (i, info))
-
-    input_index = int(input("Enter device: ").strip())
-
-    if input_index < 0 or input_index >= len(devs):
-        raise Exception('Invalid device index')
-
-    if input(
-        'You have selected: %s. Confirm? [yY]' %
-            (devs[input_index][1])).lower().strip() != 'y':
-        raise Exception('Failed confirmation')
-
-    return devs[input_index][0]
-
-
-def wait_for_devices(ignored_devs=[]):
-    check_interval = 0.5
-
+def wait_for_devices(
+    handle_message,
+    handle_error,
+    ignored_devs=[],
+    check_interval = 1
+):
     ignored_descriptors = [str(d.descriptor) for d in ignored_devs]
     for i in range(int(WAIT_FOR_DEVICE_TIMEOUT / check_interval)):
         devs = list(CtapHidDevice.list_devices())
@@ -50,14 +24,31 @@ def wait_for_devices(ignored_devs=[]):
             return devs
 
         if i == 0:
-            send_command('msg', [], 'Please insert your fido2 token now...')
+            handle_message('Please insert your fido2 token now...')
 
         sleep(check_interval)
 
-    send_command(
-        'error',
-        ['internal'],
-        'Timed out waiting for device to be present.')
+    handle_error('Timed out waiting for device to be present.')
+
+
+def wait_for_devices_cli(ignored_devs=[]):
+    def handle_error(message):
+        sys.stderr.write(message)
+        sys.exit(1)
+
+    return wait_for_devices(
+        lambda msg: print(msg),
+        handle_error,
+        ignored_devs
+    )
+
+
+def wait_for_devices_plugin(ignored_devs=[]):
+    return wait_for_devices(
+        lambda msg: send_command('msg', [], msg),
+        lambda msg: send_command('error', ['internal'], msg),
+        ignored_devs
+    )
 
 
 class CliInteraction(UserInteraction):
@@ -65,6 +56,7 @@ class CliInteraction(UserInteraction):
         print("\nTouch your authenticator device now...\n")
 
     def request_pin(self, permissions, rd_id):
+        # TODO: add note about consequences if it fails
         return getpass("Enter PIN: ")
 
     def request_uv(self, permissions, rd_id):
@@ -88,6 +80,7 @@ class PluginInteraction(UserInteraction):
             nonlocal pin
             pin = data
 
+        # TODO: add note about consequences if it fails
         send_command('msg', [], 'Please enter your pin:')
 
         handle_incoming_data({
