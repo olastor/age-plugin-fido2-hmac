@@ -57,6 +57,26 @@ def check_identities_stanzas(identities, stanzas, stanzas_by_file):
 
             del stanzas_by_file[stanza[0][0]]
 
+        if len(b64decode_no_padding(stanza[0][2])) != 32:
+            send_command(
+                'error',
+                ['stanza', stanza[0][0], str(i)],
+                'Unexpected length of salt.',
+                True
+            )
+
+            del stanzas_by_file[stanza[0][0]]
+
+        if len(b64decode_no_padding(stanza[0][3])) != 12:
+            send_command(
+                'error',
+                ['stanza', stanza[0][0], str(i)],
+                'Unexpected length of nonce.',
+                True
+            )
+
+            del stanzas_by_file[stanza[0][0]]
+
 
 def try_unwrap_key(stanza_index, stanza, credential_id, dev):
     file_index = stanza[0][0]
