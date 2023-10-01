@@ -3,10 +3,14 @@
 Version: 1.0.0
 Status: Draft
 
-This plugin implements the C2SP age-plugin specification [[1]](#references)
-
 # Motivation
 
+This plugin's purpose is to enable encryption and decryption of files with age and FIDO2 tokens (such as YubiKeys, NitroKeys etc.). Unlike `age-plugin-yubikey` [1], which stores a key on the token, file keys are wrapped in a _stateless manner_ by utilizing the `hmac-secret` extension [2], similar to how systemd-cryptenroll implements it [3]. Thus, this plugin is inspired by the proof-of-concept plugin `age-plugin-fido` [4] and seeks to
+
+- be complicant with the age plugin specification [5],
+- implement the notion of recipients/identities for _non-discoverable credentials_,
+- support encryption/decryption with one or more fido2 tokens,
+- and provide decent user experience and error handling.
 
 ## Names
 
@@ -117,5 +121,9 @@ If a fido2 token is forcefully removed by the user while it still being used, th
 
 # References
 
-[1] https://github.com/C2SP/C2SP/blob/main/age-plugin.md
+[1] https://github.com/str4d/age-plugin-yubikey
+[2] https://fidoalliance.org/specs/fido-v2.2-rd-20230321/fido-client-to-authenticator-protocol-v2.2-rd-20230321.html#sctn-hmac-secret-extension
+[3] https://www.freedesktop.org/software/systemd/man/systemd-cryptenroll.html
+[4] https://github.com/riastradh/age-plugin-fido
+[5] https://github.com/C2SP/C2SP/blob/main/age-plugin.md
 

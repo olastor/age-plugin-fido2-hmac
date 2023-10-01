@@ -3,10 +3,13 @@
 ⚠️ **Use at own risk and consider this plugin to be experimental** ⚠️
 
 
-## Installation 
+## Installation
 
 ```bash
 git clone https://github.com/olastor/age-plugin-fido2-hmac.git
 cd age-plugin-fido2-hmac
 pip install .
 ```
+
+## Usage
+
