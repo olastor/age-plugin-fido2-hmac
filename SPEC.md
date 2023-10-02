@@ -39,7 +39,7 @@ The recipient encodes the following data in Bech32 using the recipient HRP:
 <recipient format version (1 byte)><credential id>
 ```
 
-where the first byte is reserved for a version number starting with 0x00 and is incremented everytime the data in the recipient changes.
+where the first byte is reserved for a version number starting with 0x01 and is incremented everytime the data in the recipient changes.
 
 ### Encryption using "identities"
 
@@ -55,9 +55,9 @@ The identity encodes the following data in Bech32 using the identity HRP:
 <identity format version (1 byte)><credential id>
 ```
 
-where the first byte is reserved for a version number starting with 0x00 and is incremented everytime the data in the identity changes.
+where the first byte is reserved for a version number starting with 0x01 and is incremented everytime the data in the identity changes.
 
-### Credential
+### Generating Credentials
 
 - uv
 - allowlist
