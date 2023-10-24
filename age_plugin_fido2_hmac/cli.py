@@ -17,7 +17,7 @@ def issue_new_recipient_or_identity(args):
         print('Please only insert one fido2 token')
         sys.exit(1)
 
-    credential_id = create_credential(devs[0])
+    credential_id = create_credential(devs[0], args.algorithm)
 
     require_pin = False
 

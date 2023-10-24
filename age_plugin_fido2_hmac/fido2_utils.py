@@ -23,7 +23,18 @@ def order_devices(devices):
         dev).info.options.get('alwaysUv') else 0)
 
 
-def create_credential(device):
+def create_credential(device, algorithm=None):
+    selected_algorithm = None
+    if algorithm:
+        try:
+            selected_algorithm = getattr(
+                cose, algorithm.upper().replace('EDDSA', 'EdDSA')).ALGORITHM
+        except Exception as e:
+            print(
+                'Error: The chosen algorithm %s is unknown.' %
+                (algorithm))
+            sys.exit(1)
+
     ctap = Ctap2(device)
     require_pin = False
 
@@ -46,18 +57,24 @@ def create_credential(device):
         pin_protocol = client_pin.protocol
         pin_auth = client_pin.protocol.authenticate(pin_token, client_hash)
 
+    rp = {'id': FIDO2_RELYING_PARTY}
+    user = {'id': os.urandom(12)}
+    algorithms = [
+        {"type": "public-key", "alg": cose.EdDSA.ALGORITHM},
+        {"type": "public-key", "alg": cose.ES256.ALGORITHM},
+        {"type": "public-key", "alg": cose.RS256.ALGORITHM}
+    ] if not selected_algorithm else [{"type": "public-key", "alg": selected_algorithm}]
+    extensions = {'hmac-secret': True}
+    options = {'rk': False}
+
     response = ctap.make_credential(
         client_hash,
-        {'id': FIDO2_RELYING_PARTY},
-        {'id': os.urandom(12)},
-        [
-            {"type": "public-key", "alg": cose.ES256.ALGORITHM},
-            # TODO: custom algs, ed25519
-            {"type": "public-key", "alg": cose.RS256.ALGORITHM}
-        ],
+        rp,
+        user,
+        algorithms,
         None,
-        {'hmac-secret': True},
-        {'rk': False},
+        extensions,
+        options,
         pin_auth,
         pin_protocol.VERSION if pin_protocol else None,
         on_keepalive=get_keepalive(device, False)
