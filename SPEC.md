@@ -29,7 +29,7 @@ Depending on whether or not the _credential id_ is kept as a separate secret the
 
 ### Encryption using "recipients"
 
-If the _credential ID_ shall be treated as _public_ information, the plugin includes it both in an age recipient string and the stanza stored in the header of the encrypted file. For decryption, only the fido2 token needs to be presented. However, since age might enforce the presence of an identity, the plugin in this case accepts a static, "magic" identity, which simply is the BECH32 encoded plugin name: `AGE-PLUGIN-FIDO2-HMAC-1QYQXV6TYDUEZ66RDV93SQUSDAT`.
+If the _credential ID_ shall be treated as _public_ information, the plugin includes it both in an age recipient string and the stanza stored in the header of the encrypted file. For decryption, only the fido2 token needs to be presented. However, since age might enforce the presence of an identity, the plugin in this case accepts a static, "magic" identity, which simply is the BECH32-encoded plugin name: `AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76`.
 
 This mode of encryption opts for convenience, but does not protect well against compromise of the (physical) fido2 token. It is therefore recommended to activate "user verification", i.e., via PIN, when creating the recipient.
 

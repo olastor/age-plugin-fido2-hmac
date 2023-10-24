@@ -8,6 +8,14 @@ def send_command(
     data: str = '',
     wait_for_ok=False
 ):
+    """Send a command to age.
+
+    Args:
+        command (str): The command.
+        metadata (list, optional): Optional metadata to add.. Defaults to [].
+        data (str, optional): Optional data to send.. Defaults to ''.
+        wait_for_ok (bool, optional): Whether or not to wait for an "ok" response. Defaults to False.
+    """
     message = '-> %s%s%s\n' % (
         command,
         ' %s' % (' '.join(metadata)) if len(metadata) > 0 else '',
@@ -26,6 +34,11 @@ def send_command(
 
 
 def handle_incoming_data(handlers):
+    """Create a handler for messages sent from age.
+
+    Args:
+        handlers (any): The handlers (TODO: add more docs).
+    """
     current_command = None
     current_metadata = []
     expected_data_lines = None

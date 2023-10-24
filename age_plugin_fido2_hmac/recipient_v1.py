@@ -2,6 +2,7 @@ import os
 import sys
 from struct import pack
 from fido2.ctap2 import Ctap2
+from typing import List
 
 from . import PLUGIN_NAME, RECIPIENT_FORMAT_VERSION, IDENTITY_FORMAT_VERSION, parse_recipient_or_identity
 from .ipc import send_command, handle_incoming_data
@@ -13,12 +14,24 @@ DEBUG = 'AGEDEBUG' in os.environ and os.environ['AGEDEBUG'] == 'plugin'
 
 
 def wrap_all_file_keys(
-    device,
-    file_keys,
+    device: any,
+    file_keys: List[str],
     require_pin: bool,
     credential_id: bytes,
     is_recipient: bool
-):
+) -> bool:
+    """Wrap the file keys for a specific device and credential.
+
+    Args:
+        device (any): The device.
+        file_keys (List[str]): The file keys (only one as of age v1.1).
+        require_pin (bool): Whether or not to request PIN verification.
+        credential_id (bytes): The credential ID.
+        is_recipient (bool): Whether or not the information was inside a recipient.
+
+    Returns:
+        bool: Returns True if the wrapping was successful, False if the device was ineligble.
+    """
     for file_index, file_key in enumerate(file_keys):
         salt = os.urandom(32)
 
@@ -59,6 +72,9 @@ def wrap_all_file_keys(
 
 
 def recipient_v1_phase1():
+    """Handle the first phase of the state machine.
+    """
+
     identities = []
     recipients = []
 
@@ -96,7 +112,12 @@ def recipient_v1_phase1():
         sys.exit(1)
 
 
-def check_identities(identities):
+def check_identities(identities: List[str]):
+    """Check a list of identities.
+
+    Args:
+        identities (List[str]): The identities.
+    """
     for i, identity in enumerate(identities):
         try:
             version, require_pin, credential_id = parse_recipient_or_identity(
@@ -111,7 +132,12 @@ def check_identities(identities):
             sys.exit(1)
 
 
-def check_recipients(recipients):
+def check_recipients(recipients: List[str]):
+    """Check a list of recipients.
+
+    Args:
+        identities (List[str]): The recipients.
+    """
     for i, recipient in enumerate(recipients):
         try:
             version, crequire_pin, redential_id = parse_recipient_or_identity(
@@ -127,6 +153,9 @@ def check_recipients(recipients):
 
 
 def recipient_v1_phase2(recipients, identities, file_keys):
+    """Handle the second phase of the state machine.
+    """
+
     check_identities(identities)
     check_recipients(recipients)
 

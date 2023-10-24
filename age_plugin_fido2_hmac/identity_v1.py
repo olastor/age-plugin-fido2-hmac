@@ -3,6 +3,7 @@ import sys
 from struct import unpack
 from collections import defaultdict
 from fido2.ctap2 import Ctap2
+from typing import List, Mapping
 
 from . import PLUGIN_NAME, MAGIC_IDENTITY, IDENTITY_FORMAT_VERSION, parse_recipient_or_identity
 from .ipc import send_command, handle_incoming_data
@@ -13,11 +14,27 @@ from .crypto import unwrap_file_key
 DEBUG = 'AGEDEBUG' in os.environ and os.environ['AGEDEBUG'] == 'plugin'
 
 
-def chunk(lst, n):
+def chunk(lst: List[any], n: int) -> List[List[any]]:
+    """Chunk a list.
+
+    Args:
+        lst (List[any]): The list.
+        n (int): The length of each chunk.
+
+    Returns:
+        List[List[any]]: The chunked list.
+    """
     return [lst[i:i + n] for i in range(0, len(lst), n)]
 
 
-def check_identities_stanzas(identities, stanzas, stanzas_by_file):
+def check_identities_stanzas(identities: List[str], stanzas: List[List[str]], stanzas_by_file: Mapping[str, List[any]]):
+    """Check the identities and stanzas received.
+
+    Args:
+        identities (List[str]): List of identities.
+        stanzas (List[List[str]]): List of stanzas.
+        stanzas_by_file (Mapping[str, List[any]]): Stanzas by their file index.
+    """
     # "plugin MUST return errors and MUST NOT attempt to unwrap
     # any file keys with otherwise-valid identities."
     for i, identity in enumerate(identities):
@@ -84,6 +101,8 @@ def check_identities_stanzas(identities, stanzas, stanzas_by_file):
 
 
 def identity_v1_phase1():
+    """Handle the first phase of the state machine.
+    """
     identities = []
     stanzas = []
 
@@ -112,7 +131,9 @@ def identity_v1_phase1():
         sys.exit(1)
 
 
-def identity_v1_phase2(identities, stanzas):
+def identity_v1_phase2(identities: List[str], stanzas: List[List[str]]):
+    """Handle the second phase of the state machine.
+    """
     stanzas_by_file = defaultdict(list)
 
     # group stanzas by their file, but remember the

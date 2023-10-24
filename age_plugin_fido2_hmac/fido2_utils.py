@@ -9,6 +9,7 @@ from hashlib import sha256
 from getpass import getpass
 from time import sleep
 from fido2.hid import CtapHidDevice
+from typing import List
 
 from . import FIDO2_RELYING_PARTY, WAIT_FOR_DEVICE_TIMEOUT
 from .b64 import b64decode_no_padding
@@ -18,12 +19,30 @@ from .ipc import send_command, handle_incoming_data
 DEBUG = 'AGEDEBUG' in os.environ and os.environ['AGEDEBUG'] == 'plugin'
 
 
-def order_devices(devices):
+def order_devices(devices: List[any]) -> List[any]:
+    """Sort devices by whether or not they always require UV. 
+    The one's that don't require it always come first.
+
+    Args:
+        devices (List[any]): List of devices.
+
+    Returns:
+        List[any]: List of devices (sorted).
+    """
     return sorted(devices, key=lambda dev: 1 if Ctap2(
         dev).info.options.get('alwaysUv') else 0)
 
 
-def create_credential(device, algorithm=None):
+def create_credential(device: any, algorithm:str=None) -> bytes:
+    """Create a new non-discoverable credential with enabled "hmac-secret" extension.
+
+    Args:
+        device (any): The device.
+        algorithm (str, optional): A custom public-key algorithm to use for the credential. Defaults to None.
+
+    Returns:
+        bytes: The credential ID.
+    """
     selected_algorithm = None
     if algorithm:
         try:
@@ -83,7 +102,18 @@ def create_credential(device, algorithm=None):
     return response.auth_data.credential_data.credential_id
 
 
-def is_device_eligble(device, credential_id, use_plugin_interaction=True):
+def is_device_eligble(device: any, credential_id: bytes, use_plugin_interaction:bool=True) -> bool:
+    """Check whether a credential ID was created with this device. Only call this function if it can
+    be expected that no user verification or presence is required, so that the check is "silent".
+
+    Args:
+        device (any): The device.
+        credential_id (bytes): The credential ID.
+        use_plugin_interaction (bool, optional): Whether or not to interact via the plugin protocol or not. Defaults to True.
+
+    Returns:
+        bool: True if the device is eligble.
+    """
     try:
         ctap = Ctap2(device)
 
@@ -119,7 +149,15 @@ def is_device_eligble(device, credential_id, use_plugin_interaction=True):
         raise e
 
 
-def request_pin_cli(client_pin):
+def request_pin_cli(client_pin: any) -> str:
+    """Request a PIN interactively for the CLI.
+
+    Args:
+        client_pin (any): A ClientPin instance.
+
+    Returns:
+        str: The entered PIN.
+    """
     retries_left, _ = client_pin.get_pin_retries()
 
     if retries_left == 0:
@@ -135,7 +173,15 @@ def request_pin_cli(client_pin):
     return getpass('Please enter your PIN: ')
 
 
-def request_pin_plugin(client_pin):
+def request_pin_plugin(client_pin: any) -> str:
+    """Request a PIN interactively via the plugin protocol.
+
+    Args:
+        client_pin (any): A ClientPin instance.
+
+    Returns:
+        str: The entered PIN.
+    """
     retries_left, _ = client_pin.get_pin_retries()
 
     if retries_left == 0:
@@ -177,7 +223,17 @@ def request_pin_plugin(client_pin):
     return pin
 
 
-def get_keepalive(device, use_plugin_interaction=True):
+def get_keepalive(device:any, use_plugin_interaction=True):
+    """Get a keepalive function for telling when user presence is needed.
+
+    Args:
+        device (any): The device.
+        use_plugin_interaction (bool, optional): Whether or not to interact via the plugin protocol or not.. Defaults to True.
+
+    Returns:
+        any: The keepalive event handler function.
+    """
+
     msg = 'Please touch the device "%s".' % (device.descriptor.product_name)
 
     if use_plugin_interaction:
@@ -200,8 +256,22 @@ def get_hmac_secret(
     salt: bytes,
     require_pin=False,
     use_plugin_interaction=True,
-    salt2=None
-):
+    salt2:bytes=None
+) -> Mapping[str, any]:
+    """Get the hmac secret from the authenticator using a certain salt and credential.
+
+    Args:
+        device (any): The device.
+        credential_id (bytes): The credential ID.
+        salt (bytes): The 32 bytes salt to use for the hmac.
+        require_pin (bool, optional): Whether or not to prompt for user verification via PIN. Defaults to False.
+        use_plugin_interaction (bool, optional): _description_. Defaults to True.
+        salt2 (bytes, optional): An optional second salt to use. Defaults to None.
+
+    Returns:
+        Mapping[str, any]:  The output of the hmac operation(s), being in the "output1" (and "output2") field.
+                            Returns None if the device is not eligble.
+    """
     try:
         ctap = Ctap2(device)
 
@@ -263,11 +333,22 @@ def get_hmac_secret(
 
 
 def wait_for_devices(
-    handle_message,
-    handle_error,
-    ignored_devs=[],
+    handle_message: any,
+    handle_error: any,
+    ignored_devs:List[any]=[],
     check_interval=1
-):
+) -> List[any]:
+    """Wait for new fido2 tokens to be inserted.
+
+    Args:
+        handle_message (str): Function to call for showing a message.
+        handle_error (any): Function to call to raise an error with a message.
+        ignored_devs (List[any], optional): A list of devices to ignore. Defaults to [].
+        check_interval (int, optional): The interval in seconds to check for new devices. Defaults to 1.
+
+    Returns:
+        List[any]: A list of new devices that appeared.
+    """
     ignored_descriptors = [str(d.descriptor) for d in ignored_devs]
     for i in range(int(WAIT_FOR_DEVICE_TIMEOUT / check_interval)):
         devs = list(CtapHidDevice.list_devices())
@@ -285,7 +366,15 @@ def wait_for_devices(
     handle_error('Timed out waiting for device to be present.')
 
 
-def wait_for_devices_cli(ignored_devs=[]):
+def wait_for_devices_cli(ignored_devs:List[any]=[]) -> List[any]:
+    """Wait for devices with CLI user interaction.
+
+    Args:
+        ignored_devs (List[any], optional): A list of devices to ignore. Defaults to [].
+
+    Returns:
+        List[any]: A list of new devices that appeared.
+    """
     def handle_error(message):
         sys.stderr.write(message)
         sys.exit(1)
@@ -297,7 +386,15 @@ def wait_for_devices_cli(ignored_devs=[]):
     )
 
 
-def wait_for_devices_plugin(ignored_devs=[]):
+def wait_for_devices_plugin(ignored_devs:List[any]=[]) -> List[any]:
+    """Wait for devices with plugin user interaction.
+
+    Args:
+        ignored_devs (List[any], optional): A list of devices to ignore. Defaults to [].
+
+    Returns:
+        List[any]: A list of new devices that appeared.
+    """
     return wait_for_devices(
         lambda msg: send_command('msg', [], msg),
         lambda msg: send_command('error', ['internal'], msg),
