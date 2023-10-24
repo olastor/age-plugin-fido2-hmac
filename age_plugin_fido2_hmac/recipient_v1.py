@@ -1,47 +1,42 @@
 import os
 import sys
-from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-from fido2.client import ClientError
+from struct import pack
+from fido2.ctap2 import Ctap2
 
 from . import PLUGIN_NAME, RECIPIENT_FORMAT_VERSION, IDENTITY_FORMAT_VERSION, parse_recipient_or_identity
 from .ipc import send_command, handle_incoming_data
 from .b64 import b64encode_no_padding, b64decode_no_padding
-from .device import wait_for_devices_plugin, PluginInteraction
-from .credential import fido2_hmac_challenge
+from .crypto import wrap_file_key
+from .fido2_utils import is_device_eligble, get_hmac_secret, wait_for_devices_plugin, order_devices
 
 DEBUG = 'AGEDEBUG' in os.environ and os.environ['AGEDEBUG'] == 'plugin'
 
 
-def try_wrap_key(file_key, file_index, credential_id, dev, include_credential_id):
-    salt = os.urandom(32)
-    hmac_secret = None
+def wrap_all_file_keys(
+    device,
+    file_keys,
+    require_pin: bool,
+    credential_id: bytes,
+    is_recipient: bool
+):
+    for file_index, file_key in enumerate(file_keys):
+        salt = os.urandom(32)
 
-    try:
-        hmac_secret = fido2_hmac_challenge(
-            dev, credential_id, salt, PluginInteraction())
-    except ClientError as e:
-        if e.code == ClientError.ERR.DEVICE_INELIGIBLE:
+        hmac_secret = get_hmac_secret(
+            device, credential_id, salt, require_pin)['output1']
+
+        if not hmac_secret:
             return False
-        else:
+
+        ciphertext = None
+        nonce = None
+        try:
+            ciphertext, nonce = wrap_file_key(
+                b64decode_no_padding(file_key), hmac_secret)
+        except BaseException as e:
             if DEBUG:
                 print(e)
-
             raise e
-    except BaseException as e:
-        if DEBUG:
-            print(e)
-
-        raise e
-
-    try:
-        cipher = ChaCha20Poly1305(hmac_secret)
-        nonce = os.urandom(12)
-
-        encrypted_file_key = cipher.encrypt(
-            nonce=nonce,
-            data=b64decode_no_padding(file_key),
-            associated_data=None
-        )
 
         send_command(
             'recipient-stanza', [
@@ -50,19 +45,17 @@ def try_wrap_key(file_key, file_index, credential_id, dev, include_credential_id
                 b64encode_no_padding(salt),
                 b64encode_no_padding(nonce)
             ] + (
-                [b64encode_no_padding(credential_id)]
-                if include_credential_id else []
+                [
+                    b64encode_no_padding(pack('?', require_pin)),
+                    b64encode_no_padding(credential_id)
+                ]
+                if is_recipient else []
             ),
-            encrypted_file_key,
+            ciphertext,
             True
         )
 
-        return True
-    except BaseException as e:
-        if DEBUG:
-            print(e)
-
-        raise e
+    return True
 
 
 def recipient_v1_phase1():
@@ -106,12 +99,13 @@ def recipient_v1_phase1():
 def check_identities(identities):
     for i, identity in enumerate(identities):
         try:
-            version, credential_id = parse_recipient_or_identity(identity)
+            version, require_pin, credential_id = parse_recipient_or_identity(
+                identity)
         except BaseException:
             send_command('error', ['identity', str(i)],
                          'Failed to parse identity!')
             sys.exit(1)
-        if version != int.from_bytes(IDENTITY_FORMAT_VERSION):
+        if version != IDENTITY_FORMAT_VERSION:
             send_command('error', ['identity', str(i)],
                          'Unsupported version number!')
             sys.exit(1)
@@ -120,15 +114,17 @@ def check_identities(identities):
 def check_recipients(recipients):
     for i, recipient in enumerate(recipients):
         try:
-            version, credential_id = parse_recipient_or_identity(recipient)
+            version, crequire_pin, redential_id = parse_recipient_or_identity(
+                recipient)
         except BaseException:
             send_command('error', ['recipient', str(i)],
                          'Failed to parse!')
             sys.exit(1)
-        if version != int.from_bytes(RECIPIENT_FORMAT_VERSION):
+        if version != RECIPIENT_FORMAT_VERSION:
             send_command('error', ['recipient', str(i)],
                          'Unsupported version number!')
             sys.exit(1)
+
 
 def recipient_v1_phase2(recipients, identities, file_keys):
     check_identities(identities)
@@ -140,45 +136,55 @@ def recipient_v1_phase2(recipients, identities, file_keys):
 
     ignored_devs = []
 
-    while (len(finished_identities) < len(identities)) or (len(finished_recipients) < len(recipients)):
+    while (len(finished_identities) < len(identities)) or (
+            len(finished_recipients) < len(recipients)):
         devs = wait_for_devices_plugin(ignored_devs)
 
-        for dev in devs:
-            for i, identity in enumerate(identities):
-                if identity in finished_identities:
-                    continue
-
-                version, credential_id = parse_recipient_or_identity(identity)
-
-                device_eligible = False
-                for file_index, file_key in enumerate(file_keys):
-                    if try_wrap_key(file_key, file_index, credential_id, dev, False):
-                        device_eligible = True
-                    elif device_eligible:
-                        send_command('error', ['identity', str(i)],
-                                     'Could not wrap all file keys!', True)
-                        sys.exit(1)
-
-                if device_eligible:
-                    finished_identities.add(identity)
+        for dev in order_devices(devs):
+            found = False
+            dev_always_uv = Ctap2(dev).info.options.get('alwaysUv')
 
             for i, recipient in enumerate(recipients):
-                if recipient in finished_recipients:
+                version, require_pin, cred_id = parse_recipient_or_identity(
+                    recipient)
+
+                if not dev_always_uv and not is_device_eligble(dev, cred_id):
                     continue
 
-                version, credential_id = parse_recipient_or_identity(recipient)
+                success = wrap_all_file_keys(
+                    dev,
+                    file_keys,
+                    require_pin,
+                    cred_id,
+                    True
+                )
 
-                device_eligible = False
-                for file_index, file_key in enumerate(file_keys):
-                    if try_wrap_key(file_key, file_index, credential_id, dev, True):
-                        device_eligible = True
-                    elif device_eligible:
-                        send_command('error', ['recipient', str(i)],
-                                     'Could not wrap all file keys!', True)
-                        sys.exit(1)
-
-                if device_eligible:
+                if success:
+                    found = True
                     finished_recipients.add(recipient)
+
+            for i, identity in enumerate(identities):
+                version, require_pin, cred_id = parse_recipient_or_identity(
+                    identity)
+
+                if not dev_always_uv and not is_device_eligble(dev, cred_id):
+                    continue
+
+                success = wrap_all_file_keys(
+                    dev,
+                    file_keys,
+                    require_pin,
+                    cred_id,
+                    False
+                )
+
+                if success:
+                    found = True
+                    finished_identities.add(identity)
+
+            if not found:
+                send_command('msg', [],
+                             'Please insert the correct device.', True)
 
         ignored_devs += devs
 

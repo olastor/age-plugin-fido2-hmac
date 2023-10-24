@@ -1,14 +1,15 @@
-# spec
+# Plugin Specification: age-plugin-fido2-hmac
 
-Version: 1.0.0
-Status: Draft
+- Version: 1.0.0
+- Last Updated: xxx
+- Status: Draft
 
 # Motivation
 
 This plugin's purpose is to enable encryption and decryption of files with age and FIDO2 tokens (such as YubiKeys, NitroKeys etc.). Unlike `age-plugin-yubikey` [1], which stores a key on the token, file keys are wrapped in a _stateless manner_ by utilizing the `hmac-secret` extension [2], similar to how systemd-cryptenroll implements it [3]. Thus, this plugin is inspired by the proof-of-concept plugin `age-plugin-fido` [4] and seeks to
 
 - be complicant with the age plugin specification [5],
-- implement the notion of recipients/identities for _non-discoverable credentials_,
+- implement the notion of recipients/identities using _non-discoverable credentials_,
 - support encryption/decryption with one or more fido2 tokens,
 - and provide decent user experience and error handling.
 
@@ -25,6 +26,7 @@ For wrapping/unwrapping the file key provided by age, both the (physical) **fido
 
 Depending on whether or not the _credential id_ is kept as a separate secret there are two ways of defining recipients and identites. This plugin supports both types.
 
+
 ### Encryption using "recipients"
 
 If the _credential ID_ shall be treated as _public_ information, the plugin includes it both in an age recipient string and the stanza stored in the header of the encrypted file. For decryption, only the fido2 token needs to be presented. However, since age might enforce the presence of an identity, the plugin in this case accepts a static, "magic" identity, which simply is the BECH32 encoded plugin name: `AGE-PLUGIN-FIDO2-HMAC-1QYQXV6TYDUEZ66RDV93SQUSDAT`.
@@ -33,13 +35,17 @@ This mode of encryption opts for convenience, but does not protect well against 
 
 #### Format
 
-The recipient encodes the following data in Bech32 using the recipient HRP:
+The recipient encodes the following data in Bech32 using the recipient's HRP:
 
 ```
-<recipient format version (1 byte)><credential id>
++-------------------------------------------------------+
+| version (2 bytes) | pin flag (1 byte) | credential id |
++-------------------------------------------------------+
 ```
 
-where the first byte is reserved for a version number starting with 0x01 and is incremented everytime the data in the recipient changes.
+- the version which is incremented on every change of the format (big-endian unsigned short)
+- a boolean indicating whether user verification via PIN must be used for assertions
+- the variable-length credential ID
 
 ### Encryption using "identities"
 
@@ -49,31 +55,26 @@ This mode of encryption emphasizes security and anonymity. Without the age ident
 
 #### Format
 
-The identity encodes the following data in Bech32 using the identity HRP:
-
-```
-<identity format version (1 byte)><credential id>
-```
-
-where the first byte is reserved for a version number starting with 0x01 and is incremented everytime the data in the identity changes.
+The format is identical to the recipient format, but uses identity-HRP.
 
 ### Generating Credentials
 
+- up
 - uv
 - allowlist
-
+- credprotect
 
 ## Stanza Format
 
-When a recipient is used for encryption, the stanza uses the following values (encoded in base64 without padding):
+Whenever a _recipient_ is used for encryption, the following stanza is generated:
 
 ```
--> fido2-hmac <HMAC salt (32 byte)> <Nonce (12 byte)> <Credential ID>
+-> fido2-hmac <HMAC salt (32 byte)> <Nonce (12 byte)> <PIN flag (1 byte)> <Credential ID>
 <wrapped file key>
 ```
 
 
-If an identity is used, the credential ID is omitted:
+If instead an _identity_ is used, the stanza has the following shape:
 
 ```
 -> fido2-hmac <HMAC salt (32 byte)> <Nonce (12 byte)>
@@ -85,45 +86,93 @@ If an identity is used, the credential ID is omitted:
 ### Encryption
 
 1. Generate a random 32 byte `salt`.
-2. Retrieve the HMAC `hmac-secret` from the fido2 token using the credential id and the `salt`.
-3. Generate a random 12 byte `nonce`.
-4. Encrypt the file key provided by age with ChaCha20Poly1305, using `hmac-secret` as key and the previously generated `nonce`.
+2. Retrieve the HMAC `secret` from the fido2 token using the credential id and the `salt`.
+3. Generate a random 12-byte `nonce`.
+4. Encrypt the file key provided by age with ChaCha20Poly1305, using `secret` as key and the previously generated `nonce`.
 
 The resulting ciphertext is passed to age in the stanza.
 
 ### Decryption
 
-1. Retrieve the `nonce` and `salt` from age.
-2. Generate the `hmac-secret` on the fido2 token using the credential id and the `salt`.
-3. Decrypt the wrapped file key using the `hmac-secret` and `nonce`.
+1. Get the `nonce` and `salt` from the stanza.
+2. Retrieve the `secret` on the fido2 token using the credential id (which is either extracted from the stanza or an identity) and the `salt`.
+3. Decrypt the wrapped file key using the `secret` and `nonce`.
 
 # UX Considerations
 
-## Multiple Keys
+## Invalid PIN Error Handling
 
-### Creating new recipients/identities
+Show retries when pin, do BIG warning for low number of retries. Always fail if only one retry left. This is to cover the case that an error in the plugin implementation causes the pin to not be passed correctly. The user must be advised to use another way of resetting the pin counter first.
 
-When trying to create a new recipient/identity, the plugin MUST fail if there are more than one fido2 tokens inserted.
+## Multiple Tokens
 
-### File key wrapping/unwrapping
+The plugin SHOULD try to minimize the amount of user interaction required.
 
-After the list of valid recipients/identities has been assembled or whenever a token is required for performing an HMAC challenge, the plugin MUST prompt the user to insert a matching fido2 token if no token is found. If there already are one ore more tokens inserted, the plugin MUST start trying these in any order.
 
-When trying to create an HMAC challenge using a token and a specific credential ID, the fido2 library might raise an error because the combination is wrong ("device not egligible"). This error MUST be ignored if at least one of the tries with different credential IDs succeed, regardless of any file index.
+hmac ext requires up=true [2], without
 
-Once all wrapping/unwrapping tries with a specific token have been done, the plugin MUST NOT try to use the same token again while it is still inserted. If the user removes it and inserts it again, the plugin MAY stop ignoring this token.
+slient check without hmac challenge, up=false... [6] catch "CTAP2_ERR_INVALID_CREDENTIAL" error
 
-After a specific file key has been unwrapped, the plugin MUST NOT try to unwrap any more stanzas for the same file. The unwrapped file key is sent to age immediately.
+- The plugin MUST be able to decrypt the file with any of the valid tokens. It MUST NOT require one specific valid token to be presented. The user chooses which one to use.
+- The plugin MUST NOT expect the user to insert the same fido2 token multiple times for decryption. All necessary operations with a specific token MUST be done while the token is inserted the first time. For encryption, it is expected that the user does not use multiple recipients/identities that map to the same token.
+- The plugin MUST be able to deal with both with multiple tokens being available simultaneously and tokens being presented sequentially by the user.
+-  Whenever silent detection of a token that can decrypt the file is possible, the plugin SHOULD not ask the user to choose or insert a different token. All operations that can be done silently SHOULD first be exhausted before requiring user interactions.
+- The plugin SHOULD be cautious of making redundant assertions with user verification and retrying assertions. UV often means PIN verification, and tokens have a limited amount of tries after which the token can get locked and needs a reset.
+- The timeout for inserting a token SHOULD be long enough for the user to overcome common physical challenges of finding and inserting it.
 
-The plugin MUST NOT expect the user to insert the same fido2 token multiple times. All wrapping/unwrapping operations with a specific token, e.g., for different files, MUST be done the first time the fido2 token is presented. However, multiple wrapping/unwrapping operations might require multiple confirmations or user verification prompts.
+### Generating New Credentials
 
-If a fido2 token is forcefully removed by the user while it still being used, the plugin MUST raise an error and fail.
+When creating a new recipient/identity and there are multiple tokens available, the plugin MUST initiate a selection process. The user selects which token to use by proving user precence (tapping on the security key) for the token that shall be used.
+
+### Encryption
+
+A file may be encrypted with multiple tokens to prevent decryption not being possible if one token gets lost.
+
+At encryption, the file key must be wrapped by possiblly multiple tokens if there are multiple target recipients/identities.
+
+While there are remaining recipients/identities that the file key needs to be wrapped with, do the following:
+
+1. Initialize an empty _ignore list_.
+2. If no tokens are available or all available tokens are in the _ignore list_, wait until the user has one at least one new token.
+3. Sort all available tokens by their `alwaysUv` property such that the ones with `false` are before the ones with `true`. Then iterate over all tokens:
+    1. If `alwaysUv` equals `false`, perform a silent assertion without hmac-extension for each recipient's/identity's credential.
+        1. If the assertion succeeds, then send a second assertion using the hmac-assertion and the correct uv flag to obtain the secret for encryption. Remove the recipient/identity from the list of remaining recipients/identities. Terminate if none are remaining.
+        2. If the assertion fails with `CTAP2_ERR_INVALID_CREDENTIAL`, then proceed to checking the next recipient/identity. If this is the last recipient/identity to check, then show an error to the user that this token does not match, and add the token to the _ignore list_.
+        3. If any other error is raised, show an error message and abort.
+    2. If `alwaysUv` equals `true`, then ask the user which one of the recipients/identities to use (unless there is only one recipient/identity). If the chosen recipient/identity was already tried unsuccessfully, then abort in order to not make a redundant assertion with user verification. Otherwise, make an assertion using the hmac-extension and the correct `UV` flag for retrieving the secret right away.
+        1. If the assertion succeeds, then send use the secret for encryption. Remove the recipient/identity from the list of remaining recipients/identities and terminate if none are remaining.
+        2. If the assertion fails with `CTAP2_ERR_INVALID_CREDENTIAL`, then goto 3.2.
+        3. If any other error is raised, show an error message and abort.
+    3. Add the token to the _ignore list_.
+4. If there are still recipients/identities left, then goto 2.
+
+### Decryption
+
+At decryption, the file key must be unwrapped with any one of the valid tokens.
+
+1. Initialize an empty _ignore list_.
+2. If no tokens are available or all available tokens are in the _ignore list_, wait until the user has one at least one new token.
+3. Sort all available tokens by their `alwaysUv` property such that the ones with `false` are before the ones with `true`. Then iterate over all tokens:
+    1. If `alwaysUv` equals `false`, perform a silent assertion without hmac-extension for each recipient's/identity's credential.
+        1. If the assertion succeeds, then send a second assertion using the hmac-assertion and the correct `UV` flag to obtain the secret for encryption. Terminate and use the secret for decryption upon success.
+        2. If the assertion fails with `CTAP2_ERR_INVALID_CREDENTIAL`, then proceed to checking the next recipient/identity. If this is the last recipient/identity to check, then show an error to the user that this token does not match, and add the token to the _ignore list_.
+        3. If any other error is raised, show an error message and abort.
+    2. If `alwaysUv` equals `true`, then ask the user which one of the recipients/identities to use (unless there is only one recipient/identity). If the chosen recipient/identity was already tried unsuccessfully, then abort in order to not make a redundant assertion with user verification. Otherwise, make an assertion using the hmac-extension and the correct `UV` flag for retrieving the secret right away.
+        1. If the assertion succeeds, then terminate and use the obtained secret for decryption.
+        2. If the assertion fails with `CTAP2_ERR_INVALID_CREDENTIAL`, then goto 3.2.
+        3. If any other error is raised, show an error message and abort.
+    3. Add the token to the _ignore list_.
+4. Goto 2
+
+#### Caveats
+
+For identities, there is (purposely) not possible to link a stanza to an identity without performing an HMAC assertion and testing the decryption. In this case the plugin is forced to do perform "trial and error" to find out which salt/nonce was used once a token was recognized to map to an identity. Per assertion at most two HMACs can be calculated, which means if the number of times the user has to tap the token and needs to enter the PIN could be as high as `ceil((number of anonymous stanzas for this plugin) / 2)`. As it seems unlikely that the average user would use more than two identity-based tokens, keeping it this way is better than extending the stanza with addtional information which could decrease the level of anonymity/security.
 
 # References
 
-[1] https://github.com/str4d/age-plugin-yubikey
-[2] https://fidoalliance.org/specs/fido-v2.2-rd-20230321/fido-client-to-authenticator-protocol-v2.2-rd-20230321.html#sctn-hmac-secret-extension
-[3] https://www.freedesktop.org/software/systemd/man/systemd-cryptenroll.html
-[4] https://github.com/riastradh/age-plugin-fido
-[5] https://github.com/C2SP/C2SP/blob/main/age-plugin.md
-
+[1] https://github.com/str4d/age-plugin-yubikey \
+[2] https://fidoalliance.org/specs/fido-v2.1-rd-20210309/fido-client-to-authenticator-protocol-v2.1-rd-20210309.html#sctn-hmac-secret-extension \
+[3] https://www.freedesktop.org/software/systemd/man/systemd-cryptenroll.html \
+[4] https://github.com/riastradh/age-plugin-fido \
+[5] https://github.com/C2SP/C2SP/blob/main/age-plugin.md \
+[6] https://fidoalliance.org/specs/fido-v2.1-rd-20210309/fido-client-to-authenticator-protocol-v2.1-rd-20210309.html#error-responses \

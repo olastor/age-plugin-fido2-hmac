@@ -2,6 +2,9 @@
 
 ⚠️ **Use at own risk and consider this plugin to be experimental** ⚠️
 
+## Requirements
+
+- [age](https://github.com/FiloSottile/age) >= 1.1.0
 
 ## Installation
 
