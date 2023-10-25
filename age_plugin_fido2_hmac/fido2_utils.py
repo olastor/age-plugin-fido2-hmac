@@ -9,7 +9,7 @@ from hashlib import sha256
 from getpass import getpass
 from time import sleep
 from fido2.hid import CtapHidDevice
-from typing import List
+from typing import List, Mapping
 
 from . import FIDO2_RELYING_PARTY, WAIT_FOR_DEVICE_TIMEOUT
 from .b64 import b64decode_no_padding
@@ -18,9 +18,14 @@ from .ipc import send_command, handle_incoming_data
 
 DEBUG = 'AGEDEBUG' in os.environ and os.environ['AGEDEBUG'] == 'plugin'
 
+DEFAULT_ALGORITHMS = [
+    {"type": "public-key", "alg": cose.ES256.ALGORITHM},
+    {"type": "public-key", "alg": cose.EdDSA.ALGORITHM},
+    {"type": "public-key", "alg": cose.RS256.ALGORITHM}
+]
 
 def order_devices(devices: List[any]) -> List[any]:
-    """Sort devices by whether or not they always require UV. 
+    """Sort devices by whether or not they always require UV.
     The one's that don't require it always come first.
 
     Args:
@@ -78,11 +83,7 @@ def create_credential(device: any, algorithm:str=None) -> bytes:
 
     rp = {'id': FIDO2_RELYING_PARTY}
     user = {'id': os.urandom(12)}
-    algorithms = [
-        {"type": "public-key", "alg": cose.EdDSA.ALGORITHM},
-        {"type": "public-key", "alg": cose.ES256.ALGORITHM},
-        {"type": "public-key", "alg": cose.RS256.ALGORITHM}
-    ] if not selected_algorithm else [{"type": "public-key", "alg": selected_algorithm}]
+    algorithms = DEFAULT_ALGORITHMS if not selected_algorithm else [{"type": "public-key", "alg": selected_algorithm}]
     extensions = {'hmac-secret': True}
     options = {'rk': False}
 

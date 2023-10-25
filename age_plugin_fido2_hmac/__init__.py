@@ -15,7 +15,7 @@ WAIT_FOR_DEVICE_TIMEOUT = 120
 MAGIC_IDENTITY = 'AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76'
 
 
-def create_identity(credential_id: bytes, require_pin: bool): str:
+def create_identity(credential_id: bytes, require_pin: bool) -> str:
     """Create an new identity for a specific fido2 credential.
 
     Args:
