@@ -47,7 +47,7 @@ def main():
 
     parser.add_argument('--age-plugin')
     parser.add_argument('-n', '--new-credential', action='store_true')
-    parser.add_argument('-a', '--algorithm')
+    parser.add_argument('-a', '--algorithm', choices=['es256', 'eddsa', 'rs256'])
     parser.add_argument('-m', '--print-magic-id', action='store_true')
     parser.add_argument('-v', '--version',
                         action='store_true')  # on/off flag
