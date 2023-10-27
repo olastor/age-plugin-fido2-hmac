@@ -25,3 +25,6 @@ By default, one of the following algorithms is picked (in that order): ES256, Ed
 ```bash
 age-plugin-fido2-hmac -a eddsa -n
 ```
+
+Note that your authenticator may not support some algorithms.
+
