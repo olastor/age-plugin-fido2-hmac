@@ -50,8 +50,6 @@ def handle_incoming_data(handlers):
             continue
 
         if line.startswith('->'):
-            assert expected_data_lines is None or expected_data_lines <= 0
-
             splitted = line[3:].split(' ')
             current_command = splitted[0].strip()
             current_metadata = splitted[1:]
