@@ -27,12 +27,11 @@ def chunk(lst: List[any], n: int) -> List[List[any]]:
     return [lst[i:i + n] for i in range(0, len(lst), n)]
 
 
-def check_identities_stanzas(identities: List[str], stanzas: List[List[str]], stanzas_by_file: Mapping[str, List[any]]):
+def check_identities_stanzas(identities: List[str], stanzas_by_file: Mapping[str, List[any]]):
     """Check the identities and stanzas received.
 
     Args:
         identities (List[str]): List of identities.
-        stanzas (List[List[str]]): List of stanzas.
         stanzas_by_file (Mapping[str, List[any]]): Stanzas by their file index.
     """
     # "plugin MUST return errors and MUST NOT attempt to unwrap
@@ -66,38 +65,39 @@ def check_identities_stanzas(identities: List[str], stanzas: List[List[str]], st
     # MUST return an error for that stanza, and MUST NOT unwrap
     # any stanzas with the same FILE_INDEX. The plugin MAY continue
     # to unwrap stanzas from other files."
-    for i, stanza in enumerate(stanzas):
-        # hidden itentities do not include the credential ids,
-        # therefore both length 4 or 5 can be valid.
-        if len(stanza[0]) not in [4, 6]:
-            send_command(
-                'error',
-                ['stanza', stanza[0][0], str(i)],
-                'Invalid stanza.',
-                True
-            )
+    for stanzas in stanzas_by_file.values():
+        for i, stanza in stanzas:
+            # hidden itentities do not include the credential ids,
+            # therefore both length 4 or 5 can be valid.
+            if len(stanza[0]) not in [4, 6]:
+                send_command(
+                    'error',
+                    ['stanza', stanza[0][0], str(i)],
+                    'Invalid stanza.',
+                    True
+                )
 
-            del stanzas_by_file[stanza[0][0]]
+                del stanzas_by_file[stanza[0][0]]
 
-        if len(b64decode_no_padding(stanza[0][2])) != 32:
-            send_command(
-                'error',
-                ['stanza', stanza[0][0], str(i)],
-                'Unexpected length of salt.',
-                True
-            )
+            if len(b64decode_no_padding(stanza[0][2])) != 32:
+                send_command(
+                    'error',
+                    ['stanza', stanza[0][0], str(i)],
+                    'Unexpected length of salt.',
+                    True
+                )
 
-            del stanzas_by_file[stanza[0][0]]
+                del stanzas_by_file[stanza[0][0]]
 
-        if len(b64decode_no_padding(stanza[0][3])) != 12:
-            send_command(
-                'error',
-                ['stanza', stanza[0][0], str(i)],
-                'Unexpected length of nonce.',
-                True
-            )
+            if len(b64decode_no_padding(stanza[0][3])) != 12:
+                send_command(
+                    'error',
+                    ['stanza', stanza[0][0], str(i)],
+                    'Unexpected length of nonce.',
+                    True
+                )
 
-            del stanzas_by_file[stanza[0][0]]
+                del stanzas_by_file[stanza[0][0]]
 
 
 def identity_v1_phase1():
@@ -139,10 +139,13 @@ def identity_v1_phase2(identities: List[str], stanzas: List[List[str]]):
     # group stanzas by their file, but remember the
     # original index of the order they were received
     for i, stanza in enumerate(stanzas):
+        if stanza[0][1] != PLUGIN_NAME:
+            continue
+
         file_index = stanza[0][0]
         stanzas_by_file[file_index].append([i, stanza])
 
-    check_identities_stanzas(identities, stanzas, stanzas_by_file)
+    check_identities_stanzas(identities, stanzas_by_file)
 
     finished = False
     ignored_devs = []
