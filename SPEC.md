@@ -103,11 +103,6 @@ The plugin MUST show appropriate error messages about incorrect PINs. If there i
 
 The plugin SHOULD try to minimize the amount of user interaction required.
 
-
-hmac ext requires up=true [2], without
-
-slient check without hmac challenge, up=false... [6] catch "CTAP2_ERR_INVALID_CREDENTIAL" error
-
 - The plugin MUST be able to decrypt the file with any of the valid tokens. It MUST NOT require one specific valid token to be presented. The user chooses which one to use.
 - The plugin MUST NOT expect the user to insert the same fido2 token multiple times for decryption. All necessary operations with a specific token MUST be done while the token is inserted the first time. For encryption, it is expected that the user does not use multiple recipients/identities that map to the same token.
 - The plugin MUST be able to deal with both with multiple tokens being available simultaneously and tokens being presented sequentially by the user.
