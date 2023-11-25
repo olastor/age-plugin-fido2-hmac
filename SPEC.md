@@ -136,14 +136,13 @@ While there are remaining recipients/identities that the file key needs to be wr
 2. If no tokens are available or all available tokens are in the _ignore list_, wait until the user has one at least one new token.
 3. Sort all available tokens by their `alwaysUv` property such that the ones with `false` are before the ones with `true`. Then iterate over all tokens:
     1. If `alwaysUv` equals `false`, perform a silent assertion without hmac-extension for each recipient's/identity's credential.
-        1. If the assertion succeeds, then send a second assertion using the hmac-assertion and the correct uv flag to obtain the secret for encryption. Remove the recipient/identity from the list of remaining recipients/identities. Terminate if none are remaining.
+        1. If the assertion succeeds, then send a second assertion using the hmac-assertion and the correct uv flag to obtain the secret for encryption. Remove the recipient/identity from the list of remaining recipients/identities. Add the token to the ignore list. Terminate if none are remaining.
         2. If the assertion fails with `CTAP2_ERR_INVALID_CREDENTIAL`, then proceed to checking the next recipient/identity. If this is the last recipient/identity to check, then show an error to the user that this token does not match, and add the token to the _ignore list_.
         3. If any other error is raised, show an error message and abort.
-    2. If `alwaysUv` equals `true`, then ask the user which one of the recipients/identities to use (unless there is only one recipient/identity). If the chosen recipient/identity was already tried unsuccessfully, then abort in order to not make a redundant assertion with user verification. Otherwise, make an assertion using the hmac-extension and the correct `UV` flag for retrieving the secret right away.
-        1. If the assertion succeeds, then send use the secret for encryption. Remove the recipient/identity from the list of remaining recipients/identities and terminate if none are remaining.
-        2. If the assertion fails with `CTAP2_ERR_INVALID_CREDENTIAL`, then goto 3.2.
+    2. If `alwaysUv` equals `true`, then pick the first remaining recipient/identity and do an assertion with the hmac-secret extension.
+        1. If the assertion succeeds, then use the secret for encryption and remove the recipient/identity from the list of remaining recipients/identities. Add the token to the ignore list. Terminate, if none are remaining.
+        2. If the assertion fails with `CTAP2_ERR_INVALID_CREDENTIAL`, then repeat 3.2 using the next remaining recipient/identity.
         3. If any other error is raised, show an error message and abort.
-    3. Add the token to the _ignore list_.
 4. If there are still recipients/identities left, then goto 2.
 
 ### Decryption
@@ -157,7 +156,7 @@ At decryption, the file key must be unwrapped with any one of the valid tokens.
         1. If the assertion succeeds, then send a second assertion using the hmac-assertion and the correct `UV` flag to obtain the secret for encryption. Terminate and use the secret for decryption upon success.
         2. If the assertion fails with `CTAP2_ERR_INVALID_CREDENTIAL`, then proceed to checking the next recipient/identity. If this is the last recipient/identity to check, then show an error to the user that this token does not match, and add the token to the _ignore list_.
         3. If any other error is raised, show an error message and abort.
-    2. If `alwaysUv` equals `true`, then ask the user which one of the recipients/identities to use (unless there is only one recipient/identity). If the chosen recipient/identity was already tried unsuccessfully, then abort in order to not make a redundant assertion with user verification. Otherwise, make an assertion using the hmac-extension and the correct `UV` flag for retrieving the secret right away.
+    2. If `alwaysUv` equals `true`, then do trial and error for all recipients/identities.
         1. If the assertion succeeds, then terminate and use the obtained secret for decryption.
         2. If the assertion fails with `CTAP2_ERR_INVALID_CREDENTIAL`, then goto 3.2.
         3. If any other error is raised, show an error message and abort.
