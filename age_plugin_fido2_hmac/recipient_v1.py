@@ -12,7 +12,6 @@ from .fido2_utils import is_device_eligble, get_hmac_secret, wait_for_devices_pl
 
 DEBUG = 'AGEDEBUG' in os.environ and os.environ['AGEDEBUG'] == 'plugin'
 
-
 def wrap_all_file_keys(
     device: any,
     file_keys: List[str],
@@ -36,10 +35,12 @@ def wrap_all_file_keys(
         salt = os.urandom(32)
 
         hmac_secret = get_hmac_secret(
-            device, credential_id, salt, require_pin)['output1']
+            device, credential_id, salt, require_pin)
 
         if not hmac_secret:
             return False
+
+        hmac_secret = hmac_secret['output1']
 
         ciphertext = None
         nonce = None
@@ -160,61 +161,44 @@ def recipient_v1_phase2(recipients, identities, file_keys):
     check_recipients(recipients)
 
     # these recipients/identities have successfully wrapped all file keys
-    finished_identities = set()
-    finished_recipients = set()
-
+    finished = set()
     ignored_devs = []
 
-    while (len(finished_identities) < len(identities)) or (
-            len(finished_recipients) < len(recipients)):
-        devs = wait_for_devices_plugin(ignored_devs)
+    while (len(finished) < len(identities) + len(recipients)):
+        available_devs = wait_for_devices_plugin(ignored_devs)
+        next_dev = order_devices(available_devs)[0]
 
-        for dev in order_devices(devs):
-            found = False
-            dev_always_uv = Ctap2(dev).info.options.get('alwaysUv')
+        dev_always_uv = Ctap2(next_dev).info.options.get('alwaysUv')
+        found = False
+        all_items = [(True, r) for r in recipients] + [(False, idx) for idx in identities]
+        for is_recipient, rec_or_id in all_items:
+            if rec_or_id in finished:
+                continue
 
-            for i, recipient in enumerate(recipients):
-                version, require_pin, cred_id = parse_recipient_or_identity(
-                    recipient)
+            version, require_pin, cred_id = parse_recipient_or_identity(
+                rec_or_id)
 
-                if not dev_always_uv and not is_device_eligble(dev, cred_id):
-                    continue
+            # take advantage of silent assertion for checking eligibility
+            if not dev_always_uv and not is_device_eligble(next_dev, cred_id):
+                continue
 
-                success = wrap_all_file_keys(
-                    dev,
-                    file_keys,
-                    require_pin,
-                    cred_id,
-                    True
-                )
+            success = wrap_all_file_keys(
+                next_dev,
+                file_keys,
+                require_pin,
+                cred_id,
+                is_recipient
+            )
 
-                if success:
-                    found = True
-                    finished_recipients.add(recipient)
+            if success:
+                finished.add(rec_or_id)
+                found = True
+                break
 
-            for i, identity in enumerate(identities):
-                version, require_pin, cred_id = parse_recipient_or_identity(
-                    identity)
+        if not found:
+            send_command('msg', [],
+                         'Please insert the correct device.', True)
 
-                if not dev_always_uv and not is_device_eligble(dev, cred_id):
-                    continue
-
-                success = wrap_all_file_keys(
-                    dev,
-                    file_keys,
-                    require_pin,
-                    cred_id,
-                    False
-                )
-
-                if success:
-                    found = True
-                    finished_identities.add(identity)
-
-            if not found:
-                send_command('msg', [],
-                             'Please insert the correct device.', True)
-
-        ignored_devs += devs
+        ignored_devs.append(next_dev)
 
     send_command('done\n', [], None)

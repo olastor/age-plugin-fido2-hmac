@@ -131,6 +131,119 @@ def identity_v1_phase1():
         sys.exit(1)
 
 
+def try_unwrapping_with_recipient_stanzas(dev, dev_always_uv, recipient_stanzas):
+    for stanza_index, stanza in recipient_stanzas:
+        salt = b64decode_no_padding(stanza[0][2])
+        nonce = b64decode_no_padding(stanza[0][3])
+        require_pin = unpack('?', b64decode_no_padding(stanza[0][4]))[0]
+        cred_id = b64decode_no_padding(stanza[0][5])
+        ciphertext = b64decode_no_padding(stanza[1])
+
+        if not dev_always_uv and not is_device_eligble(dev, cred_id):
+            continue
+
+        hmac_secret = get_hmac_secret(
+            dev, cred_id, salt, require_pin)['output1']
+
+        if not hmac_secret:
+            # the device and recipient do not match
+            continue
+
+        file_key = unwrap_file_key(ciphertext, hmac_secret, nonce)
+        if file_key:
+            send_command(
+                'file-key', [
+                    stanza[0][0]
+                ],
+                file_key,
+                True
+            )
+            send_command('done\n', [], None)
+            return True
+
+    return False
+
+
+def try_unwrapping_with_identity_stanzas(dev, dev_always_uv, identity_stanzas, identities):
+    for identity in identities:
+        if identity == MAGIC_IDENTITY:
+            continue
+
+        version, require_pin, cred_id = parse_recipient_or_identity(
+            identity)
+
+        if not dev_always_uv and not is_device_eligble(dev, cred_id):
+            continue
+
+        # we need to find out which salt/nonce decrypts the file by trial and error...
+        # because in one assertion two salts can be passed, we check
+        # two stanzas at once to avoid unnecessary user prompts
+        for i, stanza_pair in enumerate(chunk(identity_stanzas, 2)):
+            if i > 0:
+                if i == 1:
+                    send_command(
+                        'msg', [], 'The file is encrypted for multiple fido2 tokens.')
+
+                send_command(
+                    'msg', [], 'Please touch again with your token.')
+
+            stanza1_index, stanza1 = stanza_pair[0]
+
+            salt1 = b64decode_no_padding(stanza1[0][2])
+            nonce1 = b64decode_no_padding(stanza1[0][3])
+            ciphertext1 = b64decode_no_padding(stanza1[1])
+
+            salt2 = None
+            nonce2 = None
+            ciphertext2 = None
+            if len(stanza_pair) == 2:
+                stanza2_index, stanza2 = stanza_pair[1]
+                salt2 = b64decode_no_padding(stanza2[0][2])
+                nonce2 = b64decode_no_padding(stanza2[0][3])
+                ciphertext2 = b64decode_no_padding(stanza2[1])
+
+            hmac_secret_outputs = get_hmac_secret(
+                dev, cred_id, salt1, require_pin, True, salt2)
+
+            if not hmac_secret_outputs:
+                # the device and identity do not match
+                break
+
+            file_key = None
+            try:
+                file_key = unwrap_file_key(
+                    ciphertext1, hmac_secret_outputs['output1'], nonce1)
+                send_command(
+                    'file-key', [
+                        stanza1[0][0]
+                    ],
+                    file_key,
+                    True
+                )
+                send_command('done\n', [], None)
+                return True
+            except BaseException as e:
+                print(e)
+
+            if 'output2' in hmac_secret_outputs:
+                try:
+                    file_key = unwrap_file_key(
+                        ciphertext2, hmac_secret_outputs['output2'], nonce2)
+                    send_command(
+                        'file-key', [
+                            stanza2[0][0]
+                        ],
+                        file_key,
+                        True
+                    )
+                    send_command('done\n', [], None)
+                    return True
+                except BaseException as e:
+                    print(e)
+
+    return False
+
+
 def identity_v1_phase2(identities: List[str], stanzas: List[List[str]]):
     """Handle the second phase of the state machine.
     """
@@ -147,130 +260,37 @@ def identity_v1_phase2(identities: List[str], stanzas: List[List[str]]):
 
     check_identities_stanzas(identities, stanzas_by_file)
 
-    finished = False
-    ignored_devs = []
-
-    assert set(stanzas_by_file.keys()) == {
-        '0'}, 'Multiple files not supported!'
+    assert set(stanzas_by_file.keys()) == {'0'}, 'Multiple files not supported!'
 
     recipient_stanzas = [
-        (i, s) for i, s in stanzas_by_file['0'] if s[0][1] == PLUGIN_NAME and len(
-            s[0]) == 6]
-    identity_stanzas = [(i, s) for i, s in stanzas_by_file['0']
-                        if s[0][1] == PLUGIN_NAME and len(s[0]) == 4]
+        (i, s)
+        for i, s in stanzas_by_file['0']
+        if s[0][1] == PLUGIN_NAME and len(s[0]) == 6
+    ]
 
-    while not finished:
-        devs = wait_for_devices_plugin(ignored_devs)
+    identity_stanzas = [
+        (i, s) for i, s in stanzas_by_file['0']
+        if s[0][1] == PLUGIN_NAME and len(s[0]) == 4
+    ]
 
-        for dev in order_devices(devs):
-            dev_always_uv = Ctap2(dev).info.options.get('alwaysUv')
+    ignored_devs = []
+    while True:
+        available_devs = wait_for_devices_plugin(ignored_devs)
+        next_dev = order_devices(available_devs)[0]
+        dev_always_uv = Ctap2(next_dev).info.options.get('alwaysUv')
 
-            # First try to unwrap using recipient stanzas that include the credential ID
-            # using available tokens that allow for silently checking whether the cred ID
-            # was generated with the token. This is the case that requires the least amount
-            # of user interaction.
-            for stanza_index, stanza in recipient_stanzas:
-                salt = b64decode_no_padding(stanza[0][2])
-                nonce = b64decode_no_padding(stanza[0][3])
-                require_pin = unpack('?', b64decode_no_padding(stanza[0][4]))[0]
-                cred_id = b64decode_no_padding(stanza[0][5])
-                ciphertext = b64decode_no_padding(stanza[1])
+        # First try to unwrap using recipient stanzas that include the credential ID
+        # using available tokens that allow for silently checking whether the cred ID
+        # was generated with the token. This is the case that requires the least amount
+        # of user interaction.
+        if try_unwrapping_with_recipient_stanzas(next_dev, dev_always_uv, recipient_stanzas):
+            return
 
-                if not dev_always_uv and not is_device_eligble(dev, cred_id):
-                    continue
+        if try_unwrapping_with_identity_stanzas(next_dev, dev_always_uv, identity_stanzas, identities):
+            return
 
-                hmac_secret = get_hmac_secret(
-                    dev, cred_id, salt, require_pin)['output1']
+        send_command('msg', [], 'Wrong device.')
 
-                if not hmac_secret:
-                    continue
-
-                file_key = unwrap_file_key(ciphertext, hmac_secret, nonce)
-                send_command(
-                    'file-key', [
-                        stanza[0][0]
-                    ],
-                    file_key,
-                    True
-                )
-                send_command('done\n', [], None)
-                return
-
-            for identity in identities:
-                if identity == MAGIC_IDENTITY:
-                    continue
-
-                version, require_pin, cred_id = parse_recipient_or_identity(
-                    identity)
-
-                if not dev_always_uv and not is_device_eligble(dev, cred_id):
-                    continue
-
-                # we need to find out which salt/nonce decrypts the file by trial and error...
-                # because in one assertion two salts can be passed, we check
-                # two stanzas at once
-                for i, stanza_pair in enumerate(chunk(identity_stanzas, 2)):
-                    if i > 0:
-                        if i == 1:
-                            send_command(
-                                'msg', [], 'The file is encrypted for multiple fido2 tokens.')
-
-                        send_command(
-                            'msg', [], 'Please interact again with your token.')
-
-                    stanza1_index, stanza1 = stanza_pair[0]
-
-                    salt1 = b64decode_no_padding(stanza1[0][2])
-                    nonce1 = b64decode_no_padding(stanza1[0][3])
-                    ciphertext1 = b64decode_no_padding(stanza1[1])
-
-                    salt2 = None
-                    nonce2 = None
-                    ciphertext2 = None
-                    if len(stanza_pair) == 2:
-                        stanza2_index, stanza2 = stanza_pair[1]
-                        salt2 = b64decode_no_padding(stanza2[0][2])
-                        nonce2 = b64decode_no_padding(stanza2[0][3])
-                        ciphertext2 = b64decode_no_padding(stanza2[1])
-
-                    hmac_secret_outputs = get_hmac_secret(
-                        dev, cred_id, salt1, require_pin, True, salt2)
-
-                    if not hmac_secret_outputs:
-                        break
-
-                    file_key = None
-                    try:
-                        file_key = unwrap_file_key(
-                            ciphertext1, hmac_secret_outputs['output1'], nonce1)
-                        send_command(
-                            'file-key', [
-                                stanza1[0][0]
-                            ],
-                            file_key,
-                            True
-                        )
-                        send_command('done\n', [], None)
-                        return
-                    except BaseException as e:
-                        print(e)
-
-                    if 'output2' in hmac_secret_outputs:
-                        try:
-                            file_key = unwrap_file_key(
-                                ciphertext2, hmac_secret_outputs['output2'], nonce2)
-                            send_command(
-                                'file-key', [
-                                    stanza2[0][0]
-                                ],
-                                file_key,
-                                True
-                            )
-                            send_command('done\n', [], None)
-                            return
-                        except BaseException as e:
-                            print(e)
-
-        ignored_devs += devs
+        ignored_devs.append(next_dev)
 
     send_command('done\n', [], None)

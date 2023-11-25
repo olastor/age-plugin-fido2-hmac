@@ -24,6 +24,7 @@ DEFAULT_ALGORITHMS = [
     {"type": "public-key", "alg": cose.RS256.ALGORITHM}
 ]
 
+
 def order_devices(devices: List[any]) -> List[any]:
     """Sort devices by whether or not they always require UV.
     The one's that don't require it always come first.
@@ -129,14 +130,16 @@ def is_device_eligble(device: any, credential_id: bytes, use_plugin_interaction:
             allow_list,
             None,
             {'up': False},
-            on_keepalive=get_keepalive(device, use_plugin_interaction)
+            # commented out because it would prompt even though up was not needed
+            # on_keepalive=get_keepalive(device, use_plugin_interaction)
         )
 
         return True
     except CtapError as e:
         if e.code in [
             CtapError.ERR.CREDENTIAL_EXCLUDED,
-                CtapError.ERR.NO_CREDENTIALS]:
+            CtapError.ERR.NO_CREDENTIALS
+        ]:
             return False
         else:
             if DEBUG:
@@ -224,7 +227,7 @@ def request_pin_plugin(client_pin: any) -> str:
     return pin
 
 
-def get_keepalive(device:any, use_plugin_interaction=True):
+def get_keepalive(device: any, use_plugin_interaction=True):
     """Get a keepalive function for telling when user presence is needed.
 
     Args:
@@ -235,7 +238,7 @@ def get_keepalive(device:any, use_plugin_interaction=True):
         any: The keepalive event handler function.
     """
 
-    msg = 'Please touch the device "%s".' % (device.descriptor.product_name)
+    msg = 'Please touch the authenticator.'
 
     if use_plugin_interaction:
         def on_keepalive(status):

@@ -13,7 +13,7 @@ This plugin's purpose is to enable encryption and decryption of files with age a
 - support encryption/decryption with one or more fido2 tokens,
 - and provide decent user experience and error handling.
 
-## Names
+## Constants
 
 - Plugin Name: `fido2-hmac`
 - Binary Name: `age-plugin-fido2-hmac`
