@@ -57,10 +57,7 @@ The format is identical to the recipient format, but uses identity-HRP.
 
 ### Generating Credentials
 
-- up
-- uv
-- allowlist
-- credprotect
+The plugin MUST create non-discoverable credentials. It supports PIN as a means for user verification, but no other methods such as biometric features.
 
 ## Stanza Format
 
@@ -100,7 +97,7 @@ The resulting ciphertext is passed to age in the stanza.
 
 ## Invalid PIN Error Handling
 
-Show retries when pin, do BIG warning for low number of retries. Always fail if only one retry left. This is to cover the case that an error in the plugin implementation causes the pin to not be passed correctly. The user must be advised to use another way of resetting the pin counter first.
+The plugin MUST show appropriate error messages about incorrect PINs. If there is only one retry left, the plugin MUST abort immediately without using up this last try.
 
 ## Multiple Tokens
 
