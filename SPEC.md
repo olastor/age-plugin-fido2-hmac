@@ -1,7 +1,6 @@
 # Plugin Specification: age-plugin-fido2-hmac
 
 - Version: 1.0.0
-- Last Updated: xxx
 - Status: Draft
 
 # Motivation
@@ -25,7 +24,6 @@ This plugin's purpose is to enable encryption and decryption of files with age a
 For wrapping/unwrapping the file key provided by age, both the (physical) **fido2 authenticator** and the **non-discoverable credential** generated with it must be present.
 
 Depending on whether or not the _credential id_ is kept as a separate secret there are two ways of defining recipients and identites. This plugin supports both types.
-
 
 ### Encryption using "recipients"
 
