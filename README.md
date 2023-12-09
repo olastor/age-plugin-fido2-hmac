@@ -1,6 +1,6 @@
 # age-plugin-fido2-hmac
 
-Plugin for symmetric file encryption using age and fido2 tokens (that support the _hmac-secret_ extension). See SPEC.md for more details.
+Plugin for symmetric file encryption using age and fido2 tokens (that support the _hmac-secret_ extension). Thus, key generation is done in a stateless manner. See [SPEC.md](https://github.com/olastor/age-plugin-fido2-hmac/blob/main/SPEC.md) for more details.
 
 ⚠️ **Use at own risk and consider this plugin to be experimental.** ⚠️
 
@@ -39,7 +39,7 @@ Do you want to create a secret identity? [y/N]: N
 - To decrypt files encrypted with a recipient use the magic identity (`age-plugin-fido2-hmac -m`).
 - To decrypt files encrypted with an identity use the same identity.
 
-\* In contrast to asymmetric key pairs, this plugin uses symmetric encryption, meaning for both encryption and decryption the plugin needs to interact with the fido2 token. The difference between a recipient and an identity is nuanced. Basically identities isolate additional information required for decryption, while recipients treat that as public metadata. See SPEC.md for more details.
+\* In contrast to asymmetric key pairs, this plugin uses symmetric encryption, meaning for both encryption and decryption the plugin needs to interact with the fido2 token. The difference between a recipient and an identity is nuanced. Basically identities isolate additional information required for decryption, while recipients treat that as public metadata. See [SPEC.md](https://github.com/olastor/age-plugin-fido2-hmac/blob/main/SPEC.md) for more details.
 
 ### Encrypting/Decrypting
 
@@ -59,13 +59,13 @@ cat test.txt | rage -e -i identity.txt -o test.txt.enc
 
 ```bash
 age-plugin-fido2-hmac -m > magic.txt
-cat test.txt.enc | rage -d -i magic.txt -o test-decrypted.txt
+cat test.txt.enc | age -d -i magic.txt -o test-decrypted.txt
 ```
 
 or
 
 ```bash
-cat test.txt.enc | rage -d -i identity.txt -o test-decrypted.txt
+cat test.txt.enc | age -d -i identity.txt -o test-decrypted.txt
 ```
 
 ### Choosing a different algorithm
@@ -81,5 +81,5 @@ Note that
 - your authenticator **may not support** all algorithms,
 - the length of recipient/identity strings **can increase dramatically** by using a different algorithm.
 
-The default is "es256", which should provide the smallest recipient/identity strings.
+The default (in most cases) is "es256", which should provide the smallest recipient/identity strings.
 
