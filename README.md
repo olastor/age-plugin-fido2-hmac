@@ -59,13 +59,13 @@ cat test.txt | rage -e -i identity.txt -o test.txt.enc
 
 ```bash
 age-plugin-fido2-hmac -m > magic.txt
-cat test.txt.enc | rage -d -i magic.txt -o test-decrypted.txt
+cat test.txt.enc | age -d -i magic.txt -o test-decrypted.txt
 ```
 
 or
 
 ```bash
-cat test.txt.enc | rage -d -i identity.txt -o test-decrypted.txt
+cat test.txt.enc | age -d -i identity.txt -o test-decrypted.txt
 ```
 
 ### Choosing a different algorithm
