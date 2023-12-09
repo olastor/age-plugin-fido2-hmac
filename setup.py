@@ -12,7 +12,8 @@ setup(
     install_requires=[
         'cryptography~=41.0',
         'bech32~=1.2',
-        'fido2~=1.1'
+        'fido2~=1.1',
+        'click~=8.1'
     ],
     entry_points={
       'console_scripts': ['age-plugin-fido2-hmac=age_plugin_fido2_hmac.cli:main']
