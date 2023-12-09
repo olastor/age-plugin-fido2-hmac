@@ -81,5 +81,5 @@ Note that
 - your authenticator **may not support** all algorithms,
 - the length of recipient/identity strings **can increase dramatically** by using a different algorithm.
 
-The default is "es256", which should provide the smallest recipient/identity strings.
+The default (in most cases) is "es256", which should provide the smallest recipient/identity strings.
 
