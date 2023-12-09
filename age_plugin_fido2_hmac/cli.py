@@ -6,8 +6,7 @@ from fido2.ctap2 import Ctap2
 from . import PLUGIN_NAME, MAGIC_IDENTITY, create_identity, create_recipient, parse_recipient_or_identity
 from .recipient_v1 import recipient_v1_phase1
 from .identity_v1 import identity_v1_phase1
-from .device import wait_for_devices_cli
-from .fido2_utils import create_credential
+from .fido2_utils import create_credential, wait_for_devices_cli
 
 
 def issue_new_recipient_or_identity(args):
