@@ -1,4 +1,4 @@
-name: Pylint
+name: Lint and Test
 
 on: [push]
 
@@ -22,3 +22,6 @@ jobs:
     - name: Analysing the code with pylint
       run: |
         pylint -E $(git ls-files '*.py')
+    - name: Running unittests
+      run: |
+        python3 -m unittest
