@@ -1,6 +1,6 @@
 # age-plugin-fido2-hmac
 
-Plugin for symmetric file encryption using age and fido2 tokens (that support the _hmac-secret_ extension). See [SPEC.md](https://github.com/olastor/age-plugin-fido2-hmac/blob/main/SPEC.md) for more details.
+Plugin for symmetric file encryption using age and fido2 tokens (that support the _hmac-secret_ extension). Thus, key generation is done in a stateless manner. See [SPEC.md](https://github.com/olastor/age-plugin-fido2-hmac/blob/main/SPEC.md) for more details.
 
 ⚠️ **Use at own risk and consider this plugin to be experimental.** ⚠️
 
