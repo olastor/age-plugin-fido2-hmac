@@ -6,8 +6,7 @@ from fido2.ctap2 import Ctap2
 from . import PLUGIN_NAME, MAGIC_IDENTITY, create_identity, create_recipient, parse_recipient_or_identity
 from .recipient_v1 import recipient_v1_phase1
 from .identity_v1 import identity_v1_phase1
-from .device import wait_for_devices_cli
-from .fido2_utils import create_credential
+from .fido2_utils import create_credential, wait_for_devices_cli
 
 
 def issue_new_recipient_or_identity(args):
@@ -41,16 +40,44 @@ def issue_new_recipient_or_identity(args):
 def main():
     parser = argparse.ArgumentParser(
         prog='age-plugin-fido2-hmac',
-        description='What the program does',
-        epilog='Text at the bottom of help'
+        description='Age plugin for fido2 tokens with hmac extension.',
+        epilog='Use at own risk and consider this plugin to be experimental.'
     )
 
-    parser.add_argument('--age-plugin')
-    parser.add_argument('-n', '--new-credential', action='store_true')
-    parser.add_argument('-a', '--algorithm', choices=['es256', 'eddsa', 'rs256'])
-    parser.add_argument('-m', '--print-magic-id', action='store_true')
-    parser.add_argument('-v', '--version',
-                        action='store_true')  # on/off flag
+    parser.add_argument(
+        '--age-plugin',
+        choices=['recipient-v1', 'identity-v1'],
+        help='State selection for plugin interaction.'
+    )
+    parser.add_argument(
+        '-n',
+        '--new-credential',
+        action='store_true',
+        help='Generate a new credential wrapped in an age ' +
+             'recipient or identity.'
+    )
+    parser.add_argument(
+        '-a',
+        '--algorithm',
+        choices=['es256', 'eddsa', 'rs256'],
+        help='Choose a specific algorithm of the credential. ' +
+             'The fido2 token needs to support the algorithm. '
+    )
+    parser.add_argument(
+        '-m',
+        '--print-magic-id',
+        action='store_true',
+        help='Print the magic identity that can be used for decryption when ' +
+             'encryption was done to a recipient. Age expects an identity, ' +
+             'so the magic identity is merely a placeholder because only ' +
+             'the fido2 token is needed for decryption.'
+    )
+    parser.add_argument(
+        '-v',
+        '--version',
+        action='store_true',
+        help='Show the version.'
+    )
 
     args = parser.parse_args()
 
