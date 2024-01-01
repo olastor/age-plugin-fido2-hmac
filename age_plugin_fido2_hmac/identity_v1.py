@@ -260,7 +260,7 @@ def identity_v1_phase2(identities: List[str], stanzas: List[List[str]]):
 
     check_identities_stanzas(identities, stanzas_by_file)
 
-    assert set(stanzas_by_file.keys()) == {'0'}, 'Multiple files not supported!'
+    assert len(set(stanzas_by_file.keys())) <= 1, 'Multiple files not supported!'
 
     recipient_stanzas = [
         (i, s)
