@@ -16,10 +16,20 @@ def send_command(
         data (str, optional): Optional data to send.. Defaults to ''.
         wait_for_ok (bool, optional): Whether or not to wait for an "ok" response. Defaults to False.
     """
+
+    data_encoded = b64encode_no_padding(data) if data else ''
+
+    # make sure to respect the max column size
+    max_size = 64
+    data_encoded = '\n'.join([
+        data_encoded[i:i+max_size]
+        for i in range(0, len(data_encoded), max_size)
+    ])
+
     message = '-> %s%s%s\n' % (
         command,
         ' %s' % (' '.join(metadata)) if len(metadata) > 0 else '',
-        '\n' + b64encode_no_padding(data) if data else ''
+        '\n' + data_encoded
     )
 
     sys.stdout.write(message)
