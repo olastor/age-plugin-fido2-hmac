@@ -6,7 +6,7 @@
 
 :key: Symmetrically encrypt files with fido2 keys that support the "hmac-secret" extension.
 
-:hash: Unlimited generation of recipients/identities because fido2 credentials are stateless. 
+:hash: Unlimited generation of recipients/identities because generated fido2 credentials are stateless. 
 
 :memo: See [SPEC.md](https://github.com/olastor/age-plugin-fido2-hmac/blob/main/SPEC.md) for more details.
 
