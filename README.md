@@ -49,6 +49,8 @@ Do you want to create a secret identity? [y/N]: N
 - To decrypt files encrypted with a recipient use the magic identity (`age-plugin-fido2-hmac -m`).
 - To decrypt files encrypted with an identity use the same identity.
 
+#### Meaning of recipients/identities
+
 \* In contrast to asymmetric key pairs, this plugin uses symmetric encryption, meaning for both encryption and decryption the plugin needs to interact with the fido2 token. The difference between a recipient and an identity is nuanced. Basically identities isolate additional information required for decryption, while recipients treat that as public metadata. See [SPEC.md](https://github.com/olastor/age-plugin-fido2-hmac/blob/main/SPEC.md) for more details.
 
 ### Encrypting/Decrypting
