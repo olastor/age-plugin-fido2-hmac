@@ -7,7 +7,7 @@
 
 This plugin's purpose is to enable encryption and decryption of files with age and FIDO2 tokens (such as YubiKeys, NitroKeys etc.). Unlike `age-plugin-yubikey` [1], which stores a key on the token, file keys are wrapped in a _stateless manner_ by utilizing the `hmac-secret` extension [2], similar to how systemd-cryptenroll implements it [3]. Thus, this plugin is inspired by the proof-of-concept plugin `age-plugin-fido` [4] and seeks to
 
-- be complicant with the age plugin specification [5],
+- be compliant with the age plugin specification [5],
 - implement the notion of recipients/identities using _non-discoverable credentials_,
 - support encryption/decryption with one or more fido2 tokens,
 - and provide decent user experience and error handling.
