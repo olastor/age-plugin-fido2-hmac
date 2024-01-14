@@ -21,10 +21,15 @@ def send_command(
 
     # make sure to respect the max column size
     max_size = 64
+    add_trailing_newline = len(data_encoded) > 0 and (len(data_encoded) % max_size) == 0
     data_encoded = '\n'.join([
         data_encoded[i:i+max_size]
         for i in range(0, len(data_encoded), max_size)
     ])
+
+    if add_trailing_newline:
+        # important: if the body size is exactly the max size, a newline needs to be added
+        data_encoded += '\n'
 
     message = '-> %s%s%s\n' % (
         command,
