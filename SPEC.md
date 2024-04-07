@@ -1,161 +1,174 @@
 # Plugin Specification: age-plugin-fido2-hmac
 
-- Version: 1.0.0
+- Version: 2.0.0
 - Status: Draft
 
 # Motivation
 
-This plugin's purpose is to enable encryption and decryption of files with age and FIDO2 tokens (such as YubiKeys, NitroKeys etc.). Unlike `age-plugin-yubikey` [1], which stores a key on the token, file keys are wrapped in a _stateless manner_ by utilizing the `hmac-secret` extension [2], similar to how systemd-cryptenroll implements it [3]. Thus, this plugin is inspired by the proof-of-concept plugin `age-plugin-fido` [4] and seeks to
-
-- be compliant with the age plugin specification [5],
-- implement the notion of recipients/identities using _non-discoverable credentials_,
-- support encryption/decryption with one or more fido2 tokens,
-- and provide decent user experience and error handling.
+This plugin's purpose is to enable encryption and decryption of files with age and FIDO2 tokens (such as YubiKeys, NitroKeys etc.). Unlike `age-plugin-yubikey` [1], which only supports the Yubikeys series 4+, this plugin supports the fido2-only series and any fido2 token in general that implements the `hmac-secret` extension [2]. In comparison to the proof-of-concept plugin `age-plugin-fido` [4], this plugin adds the ability for encryption in absence of the authenticator and protection via PIN.
 
 ## Constants
 
 - Plugin Name: `fido2-hmac`
 - Binary Name: `age-plugin-fido2-hmac`
-- Recipient Prefix: `age1fido2-hmac`
+- Recipient Prefix: `age-plugin-fido2-hmac` (or the native X25519 recipient prefix)
 - Identity Prefix: `AGE-PLUGIN-FIDO2-HMAC-`
+- Relying Party Name: `fido2-hmac.ageplugin`
 
-## Recipients & Identities
+In the following, "authenticator" refers to a (physical) fido2 device/token.
 
-For wrapping/unwrapping the file key provided by age, both the (physical) **fido2 authenticator** and the **non-discoverable credential** generated with it must be present.
-
-Depending on whether or not the _credential id_ is kept as a separate secret there are two ways of defining recipients and identites. This plugin supports both types.
-
-### Encryption using "recipients"
-
-If the _credential ID_ shall be treated as _public_ information, the plugin includes it both in an age recipient string and the stanza stored in the header of the encrypted file. For decryption, only the fido2 token needs to be presented. However, since age might enforce the presence of an identity, the plugin in this case accepts a static, "magic" identity, which simply is the BECH32-encoded plugin name: `AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76`.
-
-This mode of encryption opts for convenience, but does not protect well against compromise of the (physical) fido2 token. It is therefore recommended to activate "user verification", i.e., via PIN, when creating the recipient.
-
-#### Format
-
-The recipient encodes the following data in Bech32 using the recipient's HRP:
+## Background: FIDO2's "hmac-secret" extension
 
 ```
-+-------------------------------------------------------+
-| version (2 bytes) | pin flag (1 byte) | credential id |
-+-------------------------------------------------------+
+                          ┌─────────────────────────────┐
+                          │ [fido2 token]               │
+[CRED_ID], RP_ID, SALT ──►│                             ├──► OUTPUT
+                          │ CRED_ID ─► secret           │
+                          │ OUTPUT = hmac(SALT, secret) │
+                          └─────────────────────────────┘
 ```
 
-- the version which is incremented on every change of the format (big-endian unsigned short)
-- a boolean indicating whether user verification via PIN must be used for assertions
-- the variable-length credential ID
+The "hmac-secret" extension enables the generation an hmac using an user-defined salt and a credential-specific secret only "known" to the device (see [here](https://fidoalliance.org/specs/fido-v2.1-rd-20210309/fido-client-to-authenticator-protocol-v2.1-rd-20210309.html#authenticatorGetAssertion)). Moreover:
 
-### Encryption using "identities"
+- Non-discoverable credentials are nearly stateless (resetting the token might still invalidate the credential). The key material is not stored on the authenticator, but is wrapped in the `CRED_ID` and can only recovered with the authenticator that generated it. For discoverable credentials, the `CRED_ID` is optional. The credential is stored on the authenticator and can be _discovered_ only using the `RP_ID` (relying party id).
+- The hmac-secret extension allows for passing one (or two) 32 byte salt(s). A credential-specific secret is used to generate one (or two) hmac output(s) on the device. Only the output leaves the device, not the secret. The secret is different if a PIN is used.
 
-In contrast to the above, the plugin also allows for creating age identities which contain a credential id, treating them as _private_ information. For encryption, the identity is provided instead of a recipient and the credential id is **not** included in the stanza. Thus, decryption requires the exact same identity in addition to the presence of the (physical) fido2 token.
+## Considerations
 
-This mode of encryption emphasizes security and anonymity. Without the age identity, it is impossible to decrypt the file or identify the fido2 token used for encryption. The user is responsible for keeping the age identity secret and preventing it from being lossed.
+### Security Goals
 
-#### Format
+#### SG-1: Secure Encryption
 
-The format is identical to the recipient format, but uses identity-HRP.
+The encryption/wrapping of the file key MUST use a secure encryption algorithm. The key material MUST have proper entropy. It MUST NOT be possible to recover the key without physical access to the authenticator and knowledge of the PIN (if set and meant to be required).
 
-### Generating Credentials
+#### SG-2: Minimal Exposure of Secret Key
 
-The plugin MUST create non-discoverable credentials. It supports PIN as a means for user verification, but no other methods such as biometric features.
+The secret key (the HMAC-output) MUST be kept only in memory temporarily for performing the necessary cryptographic operations to unwrap a file key or generate a new recipient/identity.
 
-## Stanza Format
+#### SG-3: User Presence/Verification for Decryption
 
-Whenever a _recipient_ is used for encryption, the following stanza is generated:
+The secret key MUST only be generated with user presence (i.e. touching the authenticator). The user MUST be given the choice (during generation of new credentials) to additionally require user verification via PIN for every decryption.
+
+#### SG-4: Unlinkability
+
+It SHOULD NOT be possible to identify two files as being encrypted to the same recipient by only inspecting the public metdata (the stanzas).
+
+### UX Goals
+
+#### UG-1: Intuitive CLI
+
+The plugin MUST be simple and intuitive to use. It MUST only serve the purpose of encrypting files with fido2 tokens. Technicalities SHOULD be hidden or explained on a high level if it's important information to the user.
+
+#### UG-2: User Absence for Encryption
+
+Encryption SHOULD be possible in an asymmetric fashion, where the authenticator is optional for encryption, but mandatory for decryption.
+
+#### UG-3: No Separate Identities
+
+It SHOULD be possible to use the authenticator for decryption without any additional identity file.
+
+### Trade-Offs
+
+Using a new salt for every encryption would mean the authenticator must be present and challenged for a new hmac output. UG-2 cannot be achieved in this case. If encryption is done in absence of the authenticator, reusing the same combination of a salt and credential is therefore implied.
+
+Moreover, SG-4 conflicts with UG-3. In order to not have a separate identity, the salt and the credential ID must be included as public metadata in the stanza, as these provide the necessary information to recover the secret key. Even using discoverable credentials, the (separate) salt must still be treated as public metadata and can be used to link ciphertexts. Only if a fixed salt would be used at all times, both SG-4 and UG-3 would be possible (with discoverable credentials only). However, this might raise further concerns about whether or not the hmac output of a fixed salt can be trusted for cryptography.
+
+Considering the mentioned conflicts of interest, **two user groups** are distinguished in the following:
+
+- **Group 1**: Good UX over privacy. Fulfills SG-1, SG-2, SG-3, UG-1, UG-2, UG-3.
+  - Being able to use the plugin without storing a separate identity file is more important than unlikability.
+  - The authenticator should never be needed to present for encryption.
+- **Group 2**: Security and privacy aspects are most important. Fulfills: SG-1, SG-2, SG-3, SG-4, UG-1, UG-2
+  - To achieve unlikability, this group is willing to securely store a separate identity file that is required for decryption.
+
+## Format Specification
+
+### Identity
 
 ```
--> fido2-hmac <HMAC salt (32 byte)> <Nonce (12 byte)> <PIN flag (1 byte)> <Credential ID>
-<wrapped file key>
++--------------+----------------+------------+---------------------------------+
+| version (1B) |  pin flag (1B) | salt (32B) | credential id (variable length) |
++--------------+----------------+------------+---------------------------------+
 ```
 
+The identity (only used for _group 2_) consists of:
 
-If instead an _identity_ is used, the stanza has the following shape:
+- a fixed, byte representation of the number "2", which is the current version number of the identity format
+- a byte representation of either "0" (no PIN) or "1" (use PIN)
+- a 32 byte long, randomly generated salt
+- the credential id of a non-discoverable fido2 credential with enabled hmac-secret extension
+
+Note that _group 1_ uses a fixed, dummy identity instead.
+
+### Recipient
 
 ```
--> fido2-hmac <HMAC salt (32 byte)> <Nonce (12 byte)>
-<wrapped file key>
++--------------+---------------------+---------------+------------+---------------------------------+
+| version (1B) | x25519 pubkey (32B) | pin flag (1B) | salt (32B) | credential id (variable length) |
++--------------+---------------------+---------------+------------+---------------------------------+
 ```
 
-## File Key Wrapping
+The recipient (only used for _group 1_) consists of:
 
-### Encryption
+- a fixed, byte representation of the number "2", which is the current version number of the recipient format
+- 32 bytes of a native age x25519 public key derived from the private key (the hmac secret)
+- the rest is identical to the data of a separate identity
 
-1. Generate a random 32 byte `salt`.
-2. Retrieve the HMAC `secret` from the fido2 token using the credential id and the `salt`.
-3. Generate a random 12-byte `nonce`.
-4. Encrypt the file key provided by age with ChaCha20Poly1305, using `secret` as key and the previously generated `nonce`.
+Note that _group 2_ uses native x25519 recipients instead of plugin recipients.
 
-The resulting ciphertext is passed to age in the stanza.
+### Stanza
 
-### Decryption
+For _group 2_, the native X25519 stanza is used.
 
-1. Get the `nonce` and `salt` from the stanza.
-2. Retrieve the `secret` on the fido2 token using the credential id (which is either extracted from the stanza or an identity) and the `salt`.
-3. Decrypt the wrapped file key using the `secret` and `nonce`.
+For _group 1_, the first stanza **argument** (after the plugin name) is the base64-encoded version number of the stanza format ("2"). The second argument is the first X25519 stanza argument (the ephemeral share) after wrapping the file key. The remaining arguments are identitcal to the identity (excluding version number), i.e. three base64-encoded (unpadded) strings containing the data parts of the identity data.
 
-# UX Considerations
+```
+-> fido2-hmac <stanza version (1B)> <x25519 ephemeral share (32B)> <pin flag (1 byte)> <hmac salt (32 byte)> <cred id>
+<x25519 stanza body>
+```
 
-## Invalid PIN Error Handling
+The stanza **body** is for both groups identical to the native X25519 stanza body after wrapping the file key.
 
-The plugin MUST show appropriate error messages about incorrect PINs. If there is only one retry left, the plugin MUST abort immediately without using up this last try.
+Note: Future versions may differentiate identity and stanza versions.
 
-## Multiple Tokens
+## Protocol Specification
 
-The plugin SHOULD try to minimize the amount of user interaction required.
+### Generating New Recipients/Identities
 
-- The plugin MUST be able to decrypt the file with any of the valid tokens. It MUST NOT require one specific valid token to be presented. The user chooses which one to use.
-- The plugin MUST NOT expect the user to insert the same fido2 token multiple times for decryption. All necessary operations with a specific token MUST be done while the token is inserted the first time. For encryption, it is expected that the user does not use multiple recipients/identities that map to the same token.
-- The plugin MUST be able to deal with both with multiple tokens being available simultaneously and tokens being presented sequentially by the user.
--  Whenever silent detection of a token that can decrypt the file is possible, the plugin SHOULD not ask the user to choose or insert a different token. All operations that can be done silently SHOULD first be exhausted before requiring user interactions.
-- The plugin SHOULD be cautious of making redundant assertions with user verification and retrying assertions. UV often means PIN verification, and tokens have a limited amount of tries after which the token can get locked and needs a reset.
-- The timeout for inserting a token SHOULD be long enough for the user to overcome common physical challenges of finding and inserting it.
+1. Ask the user to insert the authenticator
+1. If the authenticator is protected via PIN, ask for the PIN (assumed to be required for creating credentials for most authenticators)
+1. Generate a new fido2 credential
+  - Set "RK" to `false` (non-discoverable)
+  - Enable the "hmac-secret" extension
+  - Use the plugin's relying party ID
+  - Use random values for user id/name
+1. Generate a 32 byte salt using a CSPRNG
+1. Ask the user whether to require a PIN for decryption
+1. Challenge the authenticator for the hmac output
+  - Use the desired PIN preference (the internal secret changes dependent on it!)
+  - Use the previously generated credential ID and salt
+1. Derive an X25519 public key using the 32 byte hmac output as a private key
+1. Discard the hmac output
+1. Ask the user which _group_ they belong to
+1. Encode the appropriate recipient and identity as specified above
 
-### Generating New Credentials
+Note: The hmac secret MUST NOT be included in the identity (let alone recipient).
 
-When creating a new recipient/identity and there are multiple tokens available, the plugin MUST initiate a selection process. The user selects which token to use by proving user precence (tapping on the security key) for the token that shall be used.
+### File Key Wrapping
 
-### Encryption
+The plugin MUST only use plugin recipients for wrapping.
 
-A file may be encrypted with multiple tokens to prevent decryption not being possible if one token gets lost.
+For _group 2_, encryption happens without any plugin interactions since the recipient is a native age recipient.
 
-At encryption, the file key must be wrapped by possiblly multiple tokens if there are multiple target recipients/identities.
+For _group 1_, the encryption MUST use the age API to encrypt the file key to the X25519 public key in the plugin recipient. The PIN flag, salt and credential ID are copied into the stanza to enable future unwrapping.
 
-While there are remaining recipients/identities that the file key needs to be wrapped with, do the following:
+### File Key Unwrapping
 
-1. Initialize an empty _ignore list_.
-2. If no tokens are available or all available tokens are in the _ignore list_, wait until the user has one at least one new token.
-3. Sort all available tokens by their `alwaysUv` property such that the ones with `false` are before the ones with `true`. Then iterate over all tokens:
-    1. If `alwaysUv` equals `false`, perform a silent assertion without hmac-extension for each recipient's/identity's credential.
-        1. If the assertion succeeds, then send a second assertion using the hmac-assertion and the correct uv flag to obtain the secret for encryption. Remove the recipient/identity from the list of remaining recipients/identities. Add the token to the ignore list. Terminate if none are remaining.
-        2. If the assertion fails with `CTAP2_ERR_INVALID_CREDENTIAL`, then proceed to checking the next recipient/identity. If this is the last recipient/identity to check, then show an error to the user that this token does not match, and add the token to the _ignore list_.
-        3. If any other error is raised, show an error message and abort.
-    2. If `alwaysUv` equals `true`, then pick the first remaining recipient/identity and do an assertion with the hmac-secret extension.
-        1. If the assertion succeeds, then use the secret for encryption and remove the recipient/identity from the list of remaining recipients/identities. Add the token to the ignore list. Terminate, if none are remaining.
-        2. If the assertion fails with `CTAP2_ERR_INVALID_CREDENTIAL`, then repeat 3.2 using the next remaining recipient/identity.
-        3. If any other error is raised, show an error message and abort.
-4. If there are still recipients/identities left, then goto 2.
+The plugin MUST try both plugin and native X25519 stanzas for unwrapping. It MUST only accept plugin identities.
 
-### Decryption
+For both _groups_, the hmac secret MUST be obtained by challenging the authenticator using the correct PIN flag, salt and credential ID (either obtained from the stanza or identity).
 
-At decryption, the file key must be unwrapped with any one of the valid tokens.
-
-1. Initialize an empty _ignore list_.
-2. If no tokens are available or all available tokens are in the _ignore list_, wait until the user has one at least one new token.
-3. Sort all available tokens by their `alwaysUv` property such that the ones with `false` are before the ones with `true`. Then iterate over all tokens:
-    1. If `alwaysUv` equals `false`, perform a silent assertion without hmac-extension for each recipient's/identity's credential.
-        1. If the assertion succeeds, then send a second assertion using the hmac-assertion and the correct `UV` flag to obtain the secret for encryption. Terminate and use the secret for decryption upon success.
-        2. If the assertion fails with `CTAP2_ERR_INVALID_CREDENTIAL`, then proceed to checking the next recipient/identity. If this is the last recipient/identity to check, then show an error to the user that this token does not match, and add the token to the _ignore list_.
-        3. If any other error is raised, show an error message and abort.
-    2. If `alwaysUv` equals `true`, then do trial and error for all recipients/identities.
-        1. If the assertion succeeds, then terminate and use the obtained secret for decryption.
-        2. If the assertion fails with `CTAP2_ERR_INVALID_CREDENTIAL`, then goto 3.2.
-        3. If any other error is raised, show an error message and abort.
-    3. Add the token to the _ignore list_.
-4. Goto 2
-
-#### Caveats
-
-For identities, there is (purposely) not possible to link a stanza to an identity without performing an HMAC assertion and testing the decryption. In this case the plugin is forced to do perform "trial and error" to find out which salt/nonce was used once a token was recognized to map to an identity. Per assertion at most two HMACs can be calculated, which means if the number of times the user has to tap the token and needs to enter the PIN could be as high as `ceil((number of anonymous stanzas for this plugin) / 2)`. As it seems unlikely that the average user would use more than two identity-based tokens, keeping it this way is better than extending the stanza with addtional information which could decrease the level of anonymity/security.
+The hmac output is interpreted as a native age identity of type X25519. The stanza body MUST be unwrapped using the native age API.
 
 # References
 
