@@ -136,21 +136,21 @@ Note: Future versions may differentiate identity and stanza versions.
 ### Generating New Recipients/Identities
 
 1. Ask the user to insert the authenticator
-1. If the authenticator is protected via PIN, ask for the PIN (assumed to be required for creating credentials for most authenticators)
-1. Generate a new fido2 credential
+2. If the authenticator is protected via PIN, ask for the PIN (assumed to be required for creating credentials for most authenticators)
+3. Generate a new fido2 credential
   - Set "RK" to `false` (non-discoverable)
   - Enable the "hmac-secret" extension
   - Use the plugin's relying party ID
   - Use random values for user id/name
-1. Generate a 32 byte salt using a CSPRNG
-1. Ask the user whether to require a PIN for decryption
-1. Challenge the authenticator for the hmac output
+4. Generate a 32 byte salt using a CSPRNG
+5. Ask the user whether to require a PIN for decryption
+6. Challenge the authenticator for the hmac output
   - Use the desired PIN preference (the internal secret changes dependent on it!)
   - Use the previously generated credential ID and salt
-1. Derive an X25519 public key using the 32 byte hmac output as a private key
-1. Discard the hmac output
-1. Ask the user which _group_ they belong to
-1. Encode the appropriate recipient and identity as specified above
+7. Derive an X25519 public key using the 32 byte hmac output as a private key
+8. Discard the hmac output
+9. Ask the user which _group_ they belong to
+10. Encode the appropriate recipient and identity as specified above
 
 Note: The hmac secret MUST NOT be included in the identity (let alone recipient).
 
