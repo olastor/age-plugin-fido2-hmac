@@ -11,7 +11,7 @@ This plugin's purpose is to enable encryption and decryption of files with age a
 
 - Plugin Name: `fido2-hmac`
 - Binary Name: `age-plugin-fido2-hmac`
-- Recipient Prefix: `age-plugin-fido2-hmac` (or the native X25519 recipient prefix)
+- Recipient Prefix: `age1fido2-hmac` (or the native X25519 recipient prefix)
 - Identity Prefix: `AGE-PLUGIN-FIDO2-HMAC-`
 - Relying Party Name: `fido2-hmac.ageplugin`
 
