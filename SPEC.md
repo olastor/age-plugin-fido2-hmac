@@ -87,13 +87,13 @@ Considering the mentioned conflicts of interest, **two user groups** are disting
 
 ```
 +--------------+----------------+------------+---------------------------------+
-| version (1B) |  pin flag (1B) | salt (32B) | credential id (variable length) |
+| version (2B) |  pin flag (1B) | salt (32B) | credential id (variable length) |
 +--------------+----------------+------------+---------------------------------+
 ```
 
 The identity (only used for _group 2_) consists of:
 
-- a fixed, byte representation of the number "2", which is the current version number of the identity format
+- the identity format version ("2") which is incremented on every change of the format (big-endian unsigned short)
 - a byte representation of either "0" (no PIN) or "1" (use PIN)
 - a 32 byte long, randomly generated salt
 - the credential id of a non-discoverable fido2 credential with enabled hmac-secret extension
@@ -104,13 +104,13 @@ Note that _group 1_ uses a fixed, dummy identity instead.
 
 ```
 +--------------+---------------------+---------------+------------+---------------------------------+
-| version (1B) | x25519 pubkey (32B) | pin flag (1B) | salt (32B) | credential id (variable length) |
+| version (2B) | x25519 pubkey (32B) | pin flag (1B) | salt (32B) | credential id (variable length) |
 +--------------+---------------------+---------------+------------+---------------------------------+
 ```
 
 The recipient (only used for _group 1_) consists of:
 
-- a fixed, byte representation of the number "2", which is the current version number of the recipient format
+- the recipient format version ("2") which is incremented on every change of the format (big-endian unsigned short)
 - 32 bytes of a native age x25519 public key derived from the private key (the hmac secret)
 - the rest is identical to the data of a separate identity
 
@@ -123,7 +123,7 @@ For _group 2_, the native X25519 stanza is used.
 For _group 1_, the first stanza **argument** (after the plugin name) is the base64-encoded version number of the stanza format ("2"). The second argument is the first X25519 stanza argument (the ephemeral share) after wrapping the file key. The remaining arguments are identitcal to the identity (excluding version number), i.e. three base64-encoded (unpadded) strings containing the data parts of the identity data.
 
 ```
--> fido2-hmac <stanza version (1B)> <x25519 ephemeral share (32B)> <pin flag (1 byte)> <hmac salt (32 byte)> <cred id>
+-> fido2-hmac <stanza version (2B)> <x25519 ephemeral share (32B)> <pin flag (1 byte)> <hmac salt (32 byte)> <cred id>
 <x25519 stanza body>
 ```
 
