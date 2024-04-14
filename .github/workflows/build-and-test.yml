@@ -29,6 +29,9 @@ jobs:
       with:
         go-version: '1.22'
 
+    - name: Install libfido2
+      run: sudo apt install libfido2-1 libfido2-dev libfido2-doc fido2-tools
+
     - name: Build
       run: |
         VERSION="$(git describe --tags --always)"

@@ -18,6 +18,7 @@
 
 - [age](https://github.com/FiloSottile/age) (>= 1.1.0) or [rage](https://github.com/str4d/rage)
   - Prefer `rage` when encrypting to multiple fido2 tokens (because of [#525](https://github.com/FiloSottile/age/issues/526)).
+- [libfido2](https://developers.yubico.com/libfido2/)
 
 ## Installation
 
