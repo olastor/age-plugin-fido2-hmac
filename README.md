@@ -4,11 +4,11 @@
 
 ---
 
-:key: Symmetrically encrypt files with fido2 keys that support the "hmac-secret" extension.
+:key: Encrypt files with fido2 keys that support the "hmac-secret" extension.
 
-:hash: Unlimited generation of recipients/identities because generated fido2 credentials are stateless. 
+:hash: Unlimited generation of recipients/identities because generated fido2 credentials are stateless.
 
-:memo: See [SPEC.md](https://github.com/olastor/age-plugin-fido2-hmac/blob/main/SPEC.md) for more details.
+:memo: See [the spec](https://github.com/olastor/age-plugin-fido2-hmac/blob/main/docs/spec-v2.md) for more details.
 
 ---
 
@@ -21,10 +21,15 @@
 
 ## Installation
 
+Download a the latest binary from the [release page](https://github.com/olastor/age-plugin-fido2-hmac/releases).
+
+## Build from source
+
 ```bash
-git clone https://github.com/olastor/age-plugin-fido2-hmac.git
+git clone https://github.com/olastor/age-plugin-fido2-hmac
 cd age-plugin-fido2-hmac
-pip install .
+make build
+mv ./age-plugin-fido2-hmac ~/.local/bin/age-plugin-fido2-hmac
 ```
 
 ## Usage
@@ -32,13 +37,14 @@ pip install .
 ### Generate a new recpient/identity
 
 ```
-$ age-plugin-fido2-hmac -n
-Please insert your fido2 token now...
-Please enter the PIN:
-Please touch the authenticator.
-Do you want to require a PIN for encryption/decryption? [y/N]: y
-Do you want to create a secret identity? [y/N]: N
-# -> prints either recipient ("age1fido2-hmac1...") or identity ("AGE-PLUGIN-FIDO2-HMAC-...")
+$ age-plugin-fido2-hmac -g
+[*] Please insert your token now...
+[*] Please touch your token...
+[*] Please touch your token...
+[*] Are you fine with having a separate identity (better privacy)? [y/n]: y
+# created: 2024-04-14T21:49:50+02:00
+# public key: age1ss38ngkwaw570ucj778flepkenj7c2p98gtwweptpdfmde045fmshhpsna
+AGE-PLUGIN-FIDO2-HMAC-1QQPQQ7W0A8EDJCQ53YKMM0XVP...
 ```
 
 - Don't loose your fido2 token (obviously)!
@@ -46,12 +52,7 @@ Do you want to create a secret identity? [y/N]: N
 - Keep identities secret and don't loose them!
 - Keep track of which token matches which identity (if you have multiple fido2 tokens)!
 - You cannot encrypt to a recipient without your fido2 token.\*
-- To decrypt files encrypted with a recipient use the magic identity (`age-plugin-fido2-hmac -m`).
-- To decrypt files encrypted with an identity use the same identity.
-
-#### Meaning of recipients/identities
-
-\* In contrast to asymmetric key pairs, this plugin uses symmetric encryption, meaning for both encryption and decryption the plugin needs to interact with the fido2 token. The difference between a recipient and an identity is nuanced. Basically identities isolate additional information required for decryption, while recipients treat that as public metadata. See [SPEC.md](https://github.com/olastor/age-plugin-fido2-hmac/blob/main/SPEC.md) for more details.
+- To decrypt files without an identity, use the magic identity (`age-plugin-fido2-hmac -m`).
 
 ### Encrypting/Decrypting
 
@@ -85,7 +86,7 @@ cat test.txt.enc | age -d -i identity.txt -o test-decrypted.txt
 By default, one of the following algorithms is picked (in that order): ES256, EdDSA, RS256. If you want the credential to use a specific algorithm, use the `-a` parameter:
 
 ```bash
-age-plugin-fido2-hmac -a eddsa -n
+age-plugin-fido2-hmac -a eddsa -g
 ```
 
 Note that
@@ -95,3 +96,31 @@ Note that
 
 The default (in most cases) is "es256", which should provide the smallest recipient/identity strings.
 
+## Testing
+
+### Unit Tests
+
+In order to run unit tests, execute:
+
+```bash
+make test
+```
+
+### E2E Tests
+
+Use the following to setup a virtual test device without pin that always accepts any assertions:
+
+```bash
+git clone https://github.com/Nitrokey/nitrokey-3-firmware.git
+cd nitrokey-3-firmware
+nitrokey-3-firmware/runners/usbip
+cargo build
+cargo run
+make attach # separate shell
+```
+
+Then run the tests using:
+
+```bash
+make test-e2e
+```
