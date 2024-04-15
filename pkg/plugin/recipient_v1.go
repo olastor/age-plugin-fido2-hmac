@@ -82,11 +82,6 @@ func RecipientV1() error {
 			return err
 		}
 
-		identity.legacyNonce = make([]byte, 12)
-		if _, err := rand.Read(identity.legacyNonce); err != nil {
-			return err
-		}
-
 		err = identity.ObtainSecretFromToken(true, "")
 		if err != nil {
 			return err

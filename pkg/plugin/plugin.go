@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
@@ -369,6 +370,11 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 			return nil, fmt.Errorf("incomplete identity, missing or invalid secret key")
 		}
 
+		i.legacyNonce = make([]byte, 12)
+		if _, err := rand.Read(i.legacyNonce); err != nil {
+			return nil, err
+		}
+
 		if i.legacyNonce == nil || len(i.legacyNonce) != 12 {
 			return nil, fmt.Errorf("incomplete identity, missing or invalid nonce for encryption")
 		}
@@ -399,9 +405,6 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 			Args: stanzaArgs,
 			Body: ciphertext,
 		}
-
-		// make sure the nonce is not reused, any subsequent run will fail if it is not updated
-		i.legacyNonce = nil
 
 		return []*age.Stanza{stanza}, nil
 	case 2:
