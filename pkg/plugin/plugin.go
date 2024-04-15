@@ -365,8 +365,12 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(isPlugin bool, pin string) err
 func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 	switch i.Version {
 	case 1:
-		if i.secretKey == nil || i.legacyNonce == nil {
-			return nil, fmt.Errorf("incomplete identity")
+		if i.secretKey == nil || len(i.secretKey) != 32 {
+			return nil, fmt.Errorf("incomplete identity, missing or invalid secret key")
+		}
+
+		if i.legacyNonce == nil || len(i.legacyNonce) != 12 {
+			return nil, fmt.Errorf("incomplete identity, missing or invalid nonce for encryption")
 		}
 
 		aead, err := chacha20poly1305.New(i.secretKey)
@@ -395,6 +399,9 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 			Args: stanzaArgs,
 			Body: ciphertext,
 		}
+
+		// make sure the nonce is not reused, any subsequent run will fail if it is not updated
+		i.legacyNonce = nil
 
 		return []*age.Stanza{stanza}, nil
 	case 2:
