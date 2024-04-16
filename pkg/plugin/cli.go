@@ -81,6 +81,10 @@ func GenerateNewCli(algorithm libfido2.CredentialType, symmetric bool) {
 		}
 	}
 
+	if !requirePin {
+		pin = ""
+	}
+
 	var identity *Fido2HmacIdentity
 	var recipient *Fido2HmacRecipient
 	var x25519Recipient *age.X25519Recipient
