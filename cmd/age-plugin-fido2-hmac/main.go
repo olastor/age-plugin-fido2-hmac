@@ -43,17 +43,24 @@ func main() {
 		symmetricFlag bool
 	)
 
-	flag.StringVar(&pluginFlag, "age-plugin", "", "Used by age for interacting with the plugin.")
-	flag.BoolVar(&generateFlag, "g", false, "Generate a new recipient/identity pair.")
+	flag.StringVar(&pluginFlag, "age-plugin", "", "")
+
+	flag.StringVar(&algorithmFlag, "a", "es256", "")
+	flag.StringVar(&algorithmFlag, "algorithm", "es256", "")
+
+	flag.BoolVar(&generateFlag, "g", false, "")
 	flag.BoolVar(&generateFlag, "generate", false, "")
 	flag.BoolVar(&generateFlag, "n", false, "")
+
 	flag.BoolVar(&magicFlag, "m", false, "")
 	flag.BoolVar(&magicFlag, "magic-identity", false, "")
-	flag.BoolVar(&versionFlag, "v", false, "Show the version.")
-	flag.BoolVar(&versionFlag, "version", false, "")
-	flag.StringVar(&algorithmFlag, "algorithm", "es256", "")
+
 	flag.BoolVar(&symmetricFlag, "s", false, "")
 	flag.BoolVar(&symmetricFlag, "symmetric", false, "")
+
+	flag.BoolVar(&versionFlag, "v", false, "")
+	flag.BoolVar(&versionFlag, "version", false, "")
+
 	flag.BoolVar(&helpFlag, "h", false, "")
 	flag.BoolVar(&helpFlag, "help", false, "")
 
