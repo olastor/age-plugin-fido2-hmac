@@ -176,5 +176,3 @@ The hmac output is interpreted as a native age identity of type X25519. The stan
 [2] https://fidoalliance.org/specs/fido-v2.1-rd-20210309/fido-client-to-authenticator-protocol-v2.1-rd-20210309.html#sctn-hmac-secret-extension \
 [3] https://www.freedesktop.org/software/systemd/man/systemd-cryptenroll.html \
 [4] https://github.com/riastradh/age-plugin-fido \
-[5] https://github.com/C2SP/C2SP/blob/main/age-plugin.md \
-[6] https://fidoalliance.org/specs/fido-v2.1-rd-20210309/fido-client-to-authenticator-protocol-v2.1-rd-20210309.html#error-responses \
