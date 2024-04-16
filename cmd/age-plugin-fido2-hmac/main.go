@@ -43,6 +43,8 @@ func main() {
 		symmetricFlag bool
 	)
 
+	flag.Usage = func() { fmt.Fprintf(os.Stderr, "%s\n", USAGE) }
+
 	flag.StringVar(&pluginFlag, "age-plugin", "", "")
 
 	flag.StringVar(&algorithmFlag, "a", "es256", "")
@@ -67,7 +69,7 @@ func main() {
 	flag.Parse()
 
 	if helpFlag {
-		fmt.Fprintf(os.Stderr, "%s\n", USAGE)
+		flag.Usage()
 		os.Exit(0)
 	}
 
@@ -118,6 +120,6 @@ func main() {
 		os.Exit(0)
 	}
 
-	fmt.Fprintf(os.Stderr, "%s\n", USAGE)
+	flag.Usage()
 	os.Exit(1)
 }
