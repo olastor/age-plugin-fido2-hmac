@@ -110,5 +110,9 @@ func GetHmacSecret(device *libfido2.Device, credId []byte, salt []byte, pin stri
 		return nil, err
 	}
 
+	if assertion.HMACSecret == nil || len(assertion.HMACSecret) != 32 {
+		return nil, errors.New("invalid hmac secret")
+	}
+
 	return assertion.HMACSecret, nil
 }
