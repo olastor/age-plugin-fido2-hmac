@@ -35,7 +35,7 @@ func GenerateNewCli(algorithm libfido2.CredentialType, symmetric bool) {
 	fmt.Fprintf(os.Stderr, "[*] Please insert your token now...\n")
 
 	if device == nil {
-		device, err = WaitForDevice(50)
+		device, err = WaitForDevice(120)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 			os.Exit(1)

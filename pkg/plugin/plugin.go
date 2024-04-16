@@ -313,7 +313,7 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(isPlugin bool, pin string) err
 		} else {
 			fmt.Fprintf(os.Stderr, "[*] %s\n", msg)
 		}
-		device, err = WaitForDevice(50)
+		device, err = WaitForDevice(120)
 
 		if err != nil {
 			return err
