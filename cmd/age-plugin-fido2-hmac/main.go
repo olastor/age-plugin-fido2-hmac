@@ -12,6 +12,26 @@ import (
 
 var Version string
 
+const USAGE = `Usage:
+  age-plugin-fido2-hmac [-s] [-a ALG] -g
+  age-plugin-fido2-hmac -m
+
+Options:
+    -g, --generate        Generate new credentials interactively.
+    -s, --symmetric       Use symmetric encryption and use a new salt for every encryption.
+                          The token must be present for every operation.
+    -a, --algorithm       Choose a specific algorithm when creating the fido2 credential.
+                          Can be one of 'es256', 'eddsa', or 'rs256'. Default: es256
+    -m, --magic-identity  Print the magic identity to use when no identity is required.
+    -v, --version         Show the version.
+    -h, --help            Show this help message.
+
+Examples:
+  $ age-plugin-fido2-hmac -g > identity.txt
+  $ cat identity.txt | grep 'public key' | grep -oP 'age1.*' > recipient.txt
+  $ echo 'secret' | age -R recipient.txt -o secret.enc
+  $ age -d -i identity.txt secret.enc`
+
 func main() {
 	var (
 		pluginFlag    string
@@ -26,18 +46,21 @@ func main() {
 	flag.StringVar(&pluginFlag, "age-plugin", "", "Used by age for interacting with the plugin.")
 	flag.BoolVar(&generateFlag, "g", false, "Generate a new recipient/identity pair.")
 	flag.BoolVar(&generateFlag, "generate", false, "")
-	flag.BoolVar(&magicFlag, "m", false, "Print the magic identity to use when no identity is required.")
+	flag.BoolVar(&generateFlag, "n", false, "")
+	flag.BoolVar(&magicFlag, "m", false, "")
+	flag.BoolVar(&magicFlag, "magic-identity", false, "")
 	flag.BoolVar(&versionFlag, "v", false, "Show the version.")
 	flag.BoolVar(&versionFlag, "version", false, "")
-	flag.StringVar(&algorithmFlag, "algorithm", "es256", "The algorithm to use ('es256', 'eddsa', 'rs256').")
-	flag.BoolVar(&helpFlag, "h", false, "Show this help message.")
-	flag.BoolVar(&symmetricFlag, "symmetric", false, "Generate a new salt for every encryption.\nThe token must be present for every operation.")
+	flag.StringVar(&algorithmFlag, "algorithm", "es256", "")
+	flag.BoolVar(&symmetricFlag, "s", false, "")
+	flag.BoolVar(&symmetricFlag, "symmetric", false, "")
+	flag.BoolVar(&helpFlag, "h", false, "")
 	flag.BoolVar(&helpFlag, "help", false, "")
 
 	flag.Parse()
 
 	if helpFlag {
-		flag.Usage()
+		fmt.Fprintf(os.Stderr, "%s\n", USAGE)
 		os.Exit(0)
 	}
 
@@ -88,6 +111,6 @@ func main() {
 		os.Exit(0)
 	}
 
-	flag.Usage()
+	fmt.Fprintf(os.Stderr, "%s\n", USAGE)
 	os.Exit(1)
 }
