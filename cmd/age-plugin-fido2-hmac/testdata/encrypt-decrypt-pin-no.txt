@@ -1,4 +1,4 @@
-# fido key must not have pin
+# fido key must have pin 1234
 # generate new identity
 ttyin -stdin no-pin-no-identity
 exec age-plugin-fido2-hmac -g
