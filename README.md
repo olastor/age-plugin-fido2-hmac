@@ -112,12 +112,14 @@ make test
 Use the following to setup a virtual test device without pin that always accepts any assertions:
 
 ```bash
+go install github.com/rogpeppe/go-internal/cmd/testscript@latest # check PATH includes $HOME/go/bin/
+sudo dnf install usbip clang clang-devel
 git clone https://github.com/Nitrokey/nitrokey-3-firmware.git
-cd nitrokey-3-firmware
-nitrokey-3-firmware/runners/usbip
+cd nitrokey-3-firmware/runners/usbip
 cargo build
 cargo run
 make attach # separate shell
+fido2-token -S "$(fido2-token -L | head | cut -d':' -f1)" # set to 1234
 ```
 
 Then run the tests using:

@@ -37,9 +37,13 @@ exec age -d -o plaintext2 -i identity2.txt ciphertext2
 cmp plaintext plaintext2
 
 -- tty-no --
+1234
+n
 n
 
 -- tty-yes --
+1234
+n
 y
 
 -- plaintext --
