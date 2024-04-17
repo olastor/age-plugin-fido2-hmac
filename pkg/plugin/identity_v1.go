@@ -114,7 +114,7 @@ func IdentityV1() error {
 
 		identityPin := ""
 		if pin == "" && i.RequirePin {
-			msg := "Please enter you PIN"
+			msg := "Please enter your PIN:"
 			pin, err = sss.RequestValue(msg, true)
 
 			if err != nil {

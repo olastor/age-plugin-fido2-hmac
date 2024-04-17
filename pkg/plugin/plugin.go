@@ -321,7 +321,7 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(isPlugin bool, pin string) err
 	}
 
 	if i.RequirePin && pin == "" {
-		msg := "Please enter you PIN"
+		msg := "Please enter your PIN:"
 		if isPlugin {
 			pin, err = sss.RequestValue(msg, true)
 			if err != nil {
