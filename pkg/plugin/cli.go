@@ -57,9 +57,10 @@ func GenerateNewCli(algorithm libfido2.CredentialType, symmetric bool) {
 			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 			os.Exit(1)
 		}
+		fmt.Fprintf(os.Stderr, "\n")
 	}
 
-	fmt.Fprintf(os.Stderr, "\n[*] Please touch your token...\n")
+	fmt.Fprintf(os.Stderr, "[*] Please touch your token...\n")
 	credId, err := GenerateNewCredential(device, pin, algorithm)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
@@ -140,7 +141,7 @@ func GenerateNewCli(algorithm libfido2.CredentialType, symmetric bool) {
 		}
 	} else {
 		fmt.Fprintf(os.Stdout, "# public key: %s\n", recipient)
-		fmt.Fprintf(os.Stdout, "# for decryption, use `age-plugin-fido2-hmac -m` to get the following static magic identity.\n")
+		fmt.Fprint(os.Stdout, "# for decryption, use `age-plugin-fido2-hmac -m` to get the following static \"magic\" identity.\n")
 		fmt.Fprintf(os.Stdout, "%s\n", MAGIC_IDENTITY)
 	}
 }
