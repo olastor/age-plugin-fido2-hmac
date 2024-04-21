@@ -1,10 +1,10 @@
 # fido key must have pin 1234
-# generate new identity
-ttyin -stdin yes-pin-no-identity
+
+ttyin -stdin no-pin-no-identity
 exec age-plugin-fido2-hmac -g
 cp stdout out1
 
-ttyin -stdin yes-pin-yes-identity
+ttyin -stdin no-pin-yes-identity
 exec age-plugin-fido2-hmac -g
 cp stdout out2
 
@@ -32,34 +32,20 @@ exec age -R recipient1.txt -o ciphertext1 plaintext
 exec age -R recipient2.txt -o ciphertext2 plaintext
 ! stderr .
 
-ttyin -stdin pin-wrong
-! exec age -d -o plaintext1 -i identity1.txt ciphertext1
-stderr 'pin invalid'
-
-ttyin -stdin pin-wrong
-! exec age -d -o plaintext2 -i identity2.txt ciphertext2
-stderr 'pin invalid'
-
-ttyin -stdin pin
 exec age -d -o plaintext1 -i identity1.txt ciphertext1
 cmp plaintext plaintext1
 
-ttyin -stdin pin
 exec age -d -o plaintext2 -i identity2.txt ciphertext2
 cmp plaintext plaintext2
 
--- pin-wrong --
-3333
--- pin --
+-- no-pin-no-identity --
 1234
--- yes-pin-no-identity --
-1234
-y
+n
 n
 
--- yes-pin-yes-identity --
+-- no-pin-yes-identity --
 1234
-y
+n
 y
 
 -- plaintext --
