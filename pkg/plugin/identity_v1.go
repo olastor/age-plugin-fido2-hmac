@@ -9,6 +9,7 @@ import (
 	"github.com/olastor/age-plugin-sss/pkg/sss"
 	"os"
 	"sort"
+	"strings"
 )
 
 func IdentityV1() error {
@@ -20,7 +21,7 @@ func IdentityV1() error {
 	err := sss.ProtocolHandler(scanner, func(command string, args []string, body []byte) (done bool, err error) {
 		switch command {
 		case "add-identity":
-			if args[0] == MAGIC_IDENTITY {
+			if args[0] == MAGIC_IDENTITY || !strings.HasPrefix(args[0], strings.ToUpper(IDENTITY_HRP)) {
 				// do nothing
 				return false, nil
 			}
