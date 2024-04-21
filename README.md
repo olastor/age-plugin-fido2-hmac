@@ -13,73 +13,70 @@
 ---
 
 
-
 ## Requirements
 
 - [age](https://github.com/FiloSottile/age) (>= 1.1.0) or [rage](https://github.com/str4d/rage)
-  - Prefer `rage` when encrypting to multiple fido2 tokens (because of [#525](https://github.com/FiloSottile/age/issues/526)).
 - [libfido2](https://developers.yubico.com/libfido2/)
 
 ## Installation
 
-Download a the latest binary from the [release page](https://github.com/olastor/age-plugin-fido2-hmac/releases).
+Download a the latest binary from the [release page](https://github.com/olastor/age-plugin-fido2-hmac/releases). Copy the binary to your `$PATH` (preferably in `$(which age)`) and make sure it's executable.
 
 ## Build from source
 
 ```bash
-git clone https://github.com/olastor/age-plugin-fido2-hmac
+git clone https://github.com/olastor/age-plugin-fido2-hmac.git
 cd age-plugin-fido2-hmac
 make build
 mv ./age-plugin-fido2-hmac ~/.local/bin/age-plugin-fido2-hmac
 ```
 
+(requires Go 1.22)
+
 ## Usage
 
 ### Generate a new recpient/identity
 
+Generate new credentials with the following command:
+
 ```
 $ age-plugin-fido2-hmac -g
 [*] Please insert your token now...
+Please enter your PIN:
 [*] Please touch your token...
+[*] Do you want to require a PIN for decryption? [y/n]: y
 [*] Please touch your token...
 [*] Are you fine with having a separate identity (better privacy)? [y/n]: y
-# created: 2024-04-14T21:49:50+02:00
-# public key: age1ss38ngkwaw570ucj778flepkenj7c2p98gtwweptpdfmde045fmshhpsna
-AGE-PLUGIN-FIDO2-HMAC-1QQPQQ7W0A8EDJCQ53YKMM0XVP...
+# created: 2024-04-21T16:54:23+02:00
+# public key: age1zdy49ek6z60q9r34vf5mmzkx6u43pr9haqdh5lqdg7fh5tpwlfwqea356l
+AGE-PLUGIN-FIDO2-HMAC-1QQPQZRFR7ZZ2WCV...
 ```
 
-- Don't loose your fido2 token (obviously)!
-- You can only require a PIN if you have one set (obviously)!
-- Keep identities secret and don't loose them!
-- Keep track of which token matches which identity (if you have multiple fido2 tokens)!
-- You cannot encrypt to a recipient without your fido2 token.\*
-- To decrypt files without an identity, use the magic identity (`age-plugin-fido2-hmac -m`).
+You can decide between storing your fido2 credential / salt inside the encrypted file header (benefit: no separate identity / downside: ciphertexts can be linked) or in a separate identity (benefit: native age recipient, unlinkabilty / downside: keep identity stored securely somewhere). To decrypt files without an identity, use the magic identity (`age-plugin-fido2-hmac -m`).
+
+You are responsible for knowing which token matches your recipient / identity. There is no token identifier stored. If you have multiple tokens and forgot which one you used, there's no other way than trial/error to find out which one it was.
+
+If you require a PIN for decryption, you (obviously) must not forget it. The PIN check is not just an UI guard, but the token changes the secret it uses internal!
 
 ### Encrypting/Decrypting
 
 **Encryption:**
 
 ```bash
-cat test.txt | rage -r age1fido2-hmac1... -o test.txt.enc
-```
-
-or
-
-```bash
-cat test.txt | rage -e -i identity.txt -o test.txt.enc
+age -r age1... -o test.txt.enc test.txt
 ```
 
 **Decryption:**
 
 ```bash
 age-plugin-fido2-hmac -m > magic.txt
-cat test.txt.enc | age -d -i magic.txt -o test-decrypted.txt
+age -d -i magic.txt -o test-decrypted.txt test.txt.enc
 ```
 
 or
 
 ```bash
-cat test.txt.enc | age -d -i identity.txt -o test-decrypted.txt
+age -d -i identity.txt -o test-decrypted.txt test.txt.enc
 ```
 
 ### Choosing a different algorithm
@@ -109,7 +106,9 @@ make test
 
 ### E2E Tests
 
-Use the following to setup a virtual test device without pin that always accepts any assertions:
+End-to-end tests can currently no be run in the CI/CD pipeline because they require a virtual fido2 token to be mounted.
+
+Use the following to setup a virtual test device with pin "1234" that always accepts any assertions:
 
 ```bash
 go install github.com/rogpeppe/go-internal/cmd/testscript@latest # check PATH includes $HOME/go/bin/
@@ -127,3 +126,5 @@ Then run the tests using:
 ```bash
 make test-e2e
 ```
+
+To make the backwards compatibility tests work, the test device must use the file system in `e2e/test_device.bin` by running `cargo run -- --ifs <path-to-fs>` instead of just `cargo run`.
