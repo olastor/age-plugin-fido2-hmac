@@ -81,6 +81,10 @@ func ParseFido2HmacRecipient(recipient string) (*Fido2HmacRecipient, error) {
 }
 
 func ParseFido2HmacIdentity(identity string) (*Fido2HmacIdentity, error) {
+	if identity == MAGIC_IDENTITY {
+		return nil, fmt.Errorf("cannot create identity from magic identity")
+	}
+
 	hrp, data, err := bech32.Decode(strings.ToLower(identity))
 	if err != nil {
 		return nil, err
@@ -220,42 +224,67 @@ func (r *Fido2HmacRecipient) String() string {
 }
 
 func (r *Fido2HmacRecipient) Wrap(fileKey []byte) ([]*age.Stanza, error) {
-	if r.Version != 2 {
+	switch r.Version {
+	case 1:
+		identity := &Fido2HmacIdentity{
+			Version:    1,
+			RequirePin: r.RequirePin,
+			CredId:     r.CredId,
+		}
+
+		stanzas, err := identity.Wrap(fileKey)
+		if err != nil {
+			return nil, err
+		}
+
+		requirePinByte := byte(0)
+		if r.RequirePin {
+			requirePinByte = byte(1)
+		}
+
+		stanzas[0].Args = append(
+			stanzas[0].Args,
+			b64.EncodeToString([]byte{requirePinByte}),
+			b64.EncodeToString(identity.CredId),
+		)
+
+		return stanzas, nil
+	case 2:
+		x25519Recipient, err := r.X25519Recipient()
+		if err != nil {
+			return nil, err
+		}
+
+		x25519Stanzas, err := x25519Recipient.Wrap(fileKey)
+		if err != nil {
+			return nil, err
+		}
+
+		requirePinByte := byte(0)
+		if r.RequirePin {
+			requirePinByte = byte(1)
+		}
+
+		version := make([]byte, 2)
+		binary.BigEndian.PutUint16(version, uint16(STANZA_FORMAT_VERSION))
+
+		stanzaArgs := make([]string, 5)
+		stanzaArgs[0] = b64.EncodeToString(version)
+		stanzaArgs[1] = x25519Stanzas[0].Args[0]
+		stanzaArgs[2] = b64.EncodeToString([]byte{requirePinByte})
+		stanzaArgs[3] = b64.EncodeToString(r.Salt)
+		stanzaArgs[4] = b64.EncodeToString(r.CredId)
+
+		stanza := &age.Stanza{
+			Type: PLUGIN_NAME,
+			Args: stanzaArgs,
+			Body: x25519Stanzas[0].Body,
+		}
+
+		return []*age.Stanza{stanza}, nil
+	default:
 		return nil, fmt.Errorf("cannot to wrap to recipient with format version %x", r.Version)
 	}
-
-	x25519Recipient, err := r.X25519Recipient()
-	if err != nil {
-		return nil, err
-	}
-
-	x25519Stanzas, err := x25519Recipient.Wrap(fileKey)
-	if err != nil {
-		return nil, err
-	}
-
-	requirePinByte := byte(0)
-	if r.RequirePin {
-		requirePinByte = byte(1)
-	}
-
-	version := make([]byte, 2)
-	binary.BigEndian.PutUint16(version, uint16(STANZA_FORMAT_VERSION))
-
-	stanzaArgs := make([]string, 5)
-	stanzaArgs[0] = b64.EncodeToString(version)
-	stanzaArgs[1] = x25519Stanzas[0].Args[0]
-	stanzaArgs[2] = b64.EncodeToString([]byte{requirePinByte})
-	stanzaArgs[3] = b64.EncodeToString(r.Salt)
-	stanzaArgs[4] = b64.EncodeToString(r.CredId)
-
-	stanza := &age.Stanza{
-		Type: PLUGIN_NAME,
-		Args: stanzaArgs,
-		Body: x25519Stanzas[0].Body,
-	}
-
-	return []*age.Stanza{stanza}, nil
 }
 
 func (i *Fido2HmacIdentity) X25519Identity() (*age.X25519Identity, error) {
@@ -345,7 +374,12 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(isPlugin bool, pin string) err
 		fmt.Fprintf(os.Stderr, "[*] %s\n", msg)
 	}
 
-	i.secretKey, err = GetHmacSecret(device, i.CredId, i.Salt, pin)
+	if i.RequirePin {
+		i.secretKey, err = GetHmacSecret(device, i.CredId, i.Salt, pin)
+	} else {
+		i.secretKey, err = GetHmacSecret(device, i.CredId, i.Salt, "")
+	}
+
 	if err != nil {
 		return err
 	}
@@ -366,10 +400,6 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(isPlugin bool, pin string) err
 func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 	switch i.Version {
 	case 1:
-		if i.secretKey == nil || len(i.secretKey) != 32 {
-			return nil, fmt.Errorf("incomplete identity, missing or invalid secret key")
-		}
-
 		i.legacyNonce = make([]byte, 12)
 		if _, err := rand.Read(i.legacyNonce); err != nil {
 			return nil, err
@@ -377,6 +407,20 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 
 		if i.legacyNonce == nil || len(i.legacyNonce) != 12 {
 			return nil, fmt.Errorf("incomplete identity, missing or invalid nonce for encryption")
+		}
+
+		i.Salt = make([]byte, 32)
+		if _, err := rand.Read(i.Salt); err != nil {
+			return nil, err
+		}
+
+		err := i.ObtainSecretFromToken(true, "")
+		if err != nil {
+			return nil, err
+		}
+
+		if i.secretKey == nil || len(i.secretKey) != 32 {
+			return nil, fmt.Errorf("incomplete identity, missing or invalid secret key")
 		}
 
 		aead, err := chacha20poly1305.New(i.secretKey)
@@ -389,16 +433,9 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 			return nil, err
 		}
 
-		requirePinByte := byte(0)
-		if i.RequirePin {
-			requirePinByte = byte(1)
-		}
-
-		stanzaArgs := make([]string, 4)
+		stanzaArgs := make([]string, 2)
 		stanzaArgs[0] = b64.EncodeToString(i.Salt)
 		stanzaArgs[1] = b64.EncodeToString(i.legacyNonce)
-		stanzaArgs[2] = b64.EncodeToString([]byte{requirePinByte})
-		stanzaArgs[3] = b64.EncodeToString(i.CredId)
 
 		stanza := &age.Stanza{
 			Type: PLUGIN_NAME,
@@ -408,12 +445,27 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 
 		return []*age.Stanza{stanza}, nil
 	case 2:
+		err := i.ObtainSecretFromToken(true, "")
+		if err != nil {
+			return nil, err
+		}
+
+		if i.secretKey == nil || len(i.secretKey) != 32 {
+			return nil, fmt.Errorf("incomplete identity, missing or invalid secret key")
+		}
+
 		recipient, err := i.Recipient()
 		if err != nil {
 			return nil, err
 		}
 
-		return recipient.Wrap(fileKey)
+		x25519Recipient, err := recipient.X25519Recipient()
+		if err != nil {
+			return nil, err
+		}
+
+		// encrypting with an identity means we can use an X25519 stanza
+		return x25519Recipient.Wrap(fileKey)
 	default:
 		return nil, fmt.Errorf("unsupported recipient version %x", i.Version)
 	}
@@ -433,21 +485,21 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 				// v1 format has no stanza version, recognized by length of salt
 				if i.Version != 1 {
 					continue
-				} else {
-					aead, err := chacha20poly1305.New(i.secretKey)
-					if err != nil {
-						return nil, err
-					}
-
-					plaintext, err := aead.Open(nil, i.legacyNonce, stanza.Body, nil)
-					mlock.Mlock(plaintext)
-
-					if err != nil {
-						return nil, err
-					}
-
-					return plaintext, nil
 				}
+
+				aead, err := chacha20poly1305.New(i.secretKey)
+				if err != nil {
+					return nil, err
+				}
+
+				plaintext, err := aead.Open(nil, i.legacyNonce, stanza.Body, nil)
+				mlock.Mlock(plaintext)
+
+				if err != nil {
+					return nil, err
+				}
+
+				return plaintext, nil
 			}
 
 			x25519Stanzas = append(x25519Stanzas, &age.Stanza{

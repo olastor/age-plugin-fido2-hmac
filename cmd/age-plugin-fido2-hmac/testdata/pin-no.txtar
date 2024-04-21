@@ -35,8 +35,14 @@ exec age -R recipient2.txt -o ciphertext2 plaintext
 exec age -d -o plaintext1 -i identity1.txt ciphertext1
 cmp plaintext plaintext1
 
+! exec age -d -o plaintext2 -i magic.txt ciphertext2
 exec age -d -o plaintext2 -i identity2.txt ciphertext2
 cmp plaintext plaintext2
+
+exec age -e -i identity2.txt -o ciphertext3 plaintext
+! exec age -d -o plaintext3 -i magic.txt ciphertext3
+exec age -d -o plaintext3 -i identity2.txt ciphertext3
+cmp plaintext plaintext3
 
 -- no-pin-no-identity --
 1234
@@ -48,5 +54,7 @@ n
 n
 y
 
+-- magic.txt --
+AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76
 -- plaintext --
 this is the plaintext

@@ -2,7 +2,6 @@ package plugin
 
 import (
 	"bufio"
-	"crypto/rand"
 	"fmt"
 	"github.com/olastor/age-plugin-sss/pkg/sss"
 	"os"
@@ -46,25 +45,7 @@ func RecipientV1() error {
 		return err
 	}
 
-	if recipient != nil && recipient.Version == 1 {
-		identity = &Fido2HmacIdentity{
-			Version:    1,
-			RequirePin: recipient.RequirePin,
-			CredId:     recipient.CredId,
-		}
-		recipient = nil
-	}
-
-	if identity != nil && identity.Version == 2 {
-		recipient, err = identity.Recipient()
-		if err != nil {
-			return err
-		}
-
-		identity = nil
-	}
-
-	if recipient != nil && recipient.Version == 2 {
+	if recipient != nil {
 		stanzas, err := recipient.Wrap(fileKey)
 		if err != nil {
 			return err
@@ -76,17 +57,7 @@ func RecipientV1() error {
 		return nil
 	}
 
-	if identity != nil && identity.Version == 1 {
-		identity.Salt = make([]byte, 32)
-		if _, err := rand.Read(identity.Salt); err != nil {
-			return err
-		}
-
-		err = identity.ObtainSecretFromToken(true, "")
-		if err != nil {
-			return err
-		}
-
+	if identity != nil {
 		stanzas, err := identity.Wrap(fileKey)
 		identity.ClearSecret()
 		if err != nil {

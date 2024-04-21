@@ -26,6 +26,19 @@ exec age -R rec_nopin -o cipher2.txt plaintext
 exec age -i magic.txt -d cipher2.txt
 cmp stdout plaintext
 
+ttyin -stdin pin
+exec age -e -i id_pin -o cipher3.txt plaintext
+
+ttyin -stdin pin
+! exec age -i magic.txt -d cipher3.txt
+
+ttyin -stdin pin
+exec age -i id_pin -d cipher3.txt
+
+exec age -e -i id_nopin -o cipher4.txt plaintext
+! exec age -i magic.txt -d cipher4.txt
+exec age -i id_nopin -d cipher4.txt
+
 -- magic.txt --
 AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76
 -- pin-wrong --

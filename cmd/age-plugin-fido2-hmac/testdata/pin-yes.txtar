@@ -47,6 +47,19 @@ ttyin -stdin pin
 exec age -d -o plaintext2 -i identity2.txt ciphertext2
 cmp plaintext plaintext2
 
+! exec age -d -o plaintext2 -i magic.txt ciphertext2
+
+ttyin -stdin pin
+exec age -e -i identity2.txt -o ciphertext3 plaintext
+
+ttyin -stdin pin
+! exec age -d -o plaintext3 -i magic.txt ciphertext3
+
+ttyin -stdin pin
+exec age -d -o plaintext3 -i identity2.txt ciphertext3
+cmp plaintext plaintext3
+
+
 -- pin-wrong --
 3333
 -- pin --
@@ -61,5 +74,7 @@ n
 y
 y
 
+-- magic.txt --
+AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76
 -- plaintext --
 this is the plaintext

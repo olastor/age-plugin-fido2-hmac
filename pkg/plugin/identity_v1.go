@@ -64,7 +64,7 @@ func IdentityV1() error {
 			continue
 		}
 
-		// plugin stanzas can be converted to an identity
+		// plugin stanzas can be converted to an identity without the secret
 		identity, err := StanzaToIdentity(stanza)
 		if err != nil {
 			return err
