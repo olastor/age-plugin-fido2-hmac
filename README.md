@@ -4,80 +4,79 @@
 
 ---
 
-:key: Symmetrically encrypt files with fido2 keys that support the "hmac-secret" extension.
+:key: Encrypt files with fido2 keys that support the "hmac-secret" extension.
 
-:hash: Unlimited generation of recipients/identities because generated fido2 credentials are stateless. 
+:hash: Unlimited generation of recipients/identities because generated fido2 credentials are stateless.
 
-:memo: See [SPEC.md](https://github.com/olastor/age-plugin-fido2-hmac/blob/main/SPEC.md) for more details.
+:memo: See [the spec](https://github.com/olastor/age-plugin-fido2-hmac/blob/main/docs/spec-v2.md) for more details.
 
 ---
-
 
 
 ## Requirements
 
 - [age](https://github.com/FiloSottile/age) (>= 1.1.0) or [rage](https://github.com/str4d/rage)
-  - Prefer `rage` when encrypting to multiple fido2 tokens (because of [#525](https://github.com/FiloSottile/age/issues/526)).
+- [libfido2](https://developers.yubico.com/libfido2/)
 
 ## Installation
+
+Download a the latest binary from the [release page](https://github.com/olastor/age-plugin-fido2-hmac/releases). Copy the binary to your `$PATH` (preferably in `$(which age)`) and make sure it's executable.
+
+## Build from source
 
 ```bash
 git clone https://github.com/olastor/age-plugin-fido2-hmac.git
 cd age-plugin-fido2-hmac
-pip install .
+make build
+mv ./age-plugin-fido2-hmac ~/.local/bin/age-plugin-fido2-hmac
 ```
+
+(requires Go 1.22)
 
 ## Usage
 
 ### Generate a new recpient/identity
 
+Generate new credentials with the following command:
+
 ```
-$ age-plugin-fido2-hmac -n
-Please insert your fido2 token now...
-Please enter the PIN:
-Please touch the authenticator.
-Do you want to require a PIN for encryption/decryption? [y/N]: y
-Do you want to create a secret identity? [y/N]: N
-# -> prints either recipient ("age1fido2-hmac1...") or identity ("AGE-PLUGIN-FIDO2-HMAC-...")
+$ age-plugin-fido2-hmac -g
+[*] Please insert your token now...
+Please enter your PIN:
+[*] Please touch your token...
+[*] Do you want to require a PIN for decryption? [y/n]: y
+[*] Please touch your token...
+[*] Are you fine with having a separate identity (better privacy)? [y/n]: y
+# created: 2024-04-21T16:54:23+02:00
+# public key: age1zdy49ek6z60q9r34vf5mmzkx6u43pr9haqdh5lqdg7fh5tpwlfwqea356l
+AGE-PLUGIN-FIDO2-HMAC-1QQPQZRFR7ZZ2WCV...
 ```
 
-- Don't loose your fido2 token (obviously)!
-- You can only require a PIN if you have one set (obviously)!
-- Keep identities secret and don't loose them!
-- Keep track of which token matches which identity (if you have multiple fido2 tokens)!
-- You cannot encrypt to a recipient without your fido2 token.\*
-- To decrypt files encrypted with a recipient use the magic identity (`age-plugin-fido2-hmac -m`).
-- To decrypt files encrypted with an identity use the same identity.
+You can decide between storing your fido2 credential / salt inside the encrypted file header (benefit: no separate identity / downside: ciphertexts can be linked) or in a separate identity (benefit: native age recipient, unlinkabilty / downside: keep identity stored securely somewhere). To decrypt files without an identity, use the magic identity (`age-plugin-fido2-hmac -m`).
 
-#### Meaning of recipients/identities
+You are responsible for knowing which token matches your recipient / identity. There is no token identifier stored. If you have multiple tokens and forgot which one you used, there's no other way than trial/error to find out which one it was.
 
-\* In contrast to asymmetric key pairs, this plugin uses symmetric encryption, meaning for both encryption and decryption the plugin needs to interact with the fido2 token. The difference between a recipient and an identity is nuanced. Basically identities isolate additional information required for decryption, while recipients treat that as public metadata. See [SPEC.md](https://github.com/olastor/age-plugin-fido2-hmac/blob/main/SPEC.md) for more details.
+If you require a PIN for decryption, you (obviously) must not forget it. The PIN check is not just an UI guard, but the token changes the secret it uses internal!
 
 ### Encrypting/Decrypting
 
 **Encryption:**
 
 ```bash
-cat test.txt | rage -r age1fido2-hmac1... -o test.txt.enc
-```
-
-or
-
-```bash
-cat test.txt | rage -e -i identity.txt -o test.txt.enc
+age -r age1... -o test.txt.enc test.txt
 ```
 
 **Decryption:**
 
 ```bash
 age-plugin-fido2-hmac -m > magic.txt
-cat test.txt.enc | age -d -i magic.txt -o test-decrypted.txt
+age -d -i magic.txt -o test-decrypted.txt test.txt.enc
 ```
 
 or
 
 ```bash
-cat test.txt.enc | age -d -i identity.txt -o test-decrypted.txt
+age -d -i identity.txt -o test-decrypted.txt test.txt.enc
 ```
 
 ### Choosing a different algorithm
@@ -85,7 +84,7 @@ cat test.txt.enc | age -d -i identity.txt -o test-decrypted.txt
 By default, one of the following algorithms is picked (in that order): ES256, EdDSA, RS256. If you want the credential to use a specific algorithm, use the `-a` parameter:
 
 ```bash
-age-plugin-fido2-hmac -a eddsa -n
+age-plugin-fido2-hmac -a eddsa -g
 ```
 
 Note that
@@ -95,3 +94,37 @@ Note that
 
 The default (in most cases) is "es256", which should provide the smallest recipient/identity strings.
 
+## Testing
+
+### Unit Tests
+
+In order to run unit tests, execute:
+
+```bash
+make test
+```
+
+### E2E Tests
+
+End-to-end tests can currently no be run in the CI/CD pipeline because they require a virtual fido2 token to be mounted.
+
+Use the following to setup a virtual test device with pin "1234" that always accepts any assertions:
+
+```bash
+go install github.com/rogpeppe/go-internal/cmd/testscript@latest # check PATH includes $HOME/go/bin/
+sudo dnf install usbip clang clang-devel
+git clone https://github.com/Nitrokey/nitrokey-3-firmware.git
+cd nitrokey-3-firmware/runners/usbip
+cargo build
+cargo run
+make attach # separate shell
+fido2-token -S "$(fido2-token -L | head | cut -d':' -f1)" # set to 1234
+```
+
+Then run the tests using:
+
+```bash
+make test-e2e
+```
+
+To make the backwards compatibility tests work, the test device must use the file system in `e2e/test_device.bin` by running `cargo run -- --ifs <path-to-fs>` instead of just `cargo run`.

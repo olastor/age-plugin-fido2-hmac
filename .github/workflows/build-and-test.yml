@@ -1,0 +1,83 @@
+name: Build and Test
+
+on:
+  release:
+    types: [ "published" ]
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - {GOOS: linux, GOARCH: amd64}
+          - {GOOS: linux, GOARCH: arm, GOARM: 6}
+          - {GOOS: linux, GOARCH: arm64}
+          - {GOOS: darwin, GOARCH: amd64}
+          - {GOOS: darwin, GOARCH: arm64}
+          - {GOOS: windows, GOARCH: amd64}
+          - {GOOS: freebsd, GOARCH: amd64}
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+
+    - name: Install libfido2
+      run: sudo apt install libfido2-1 libfido2-dev libfido2-doc fido2-tools
+
+    - name: Build
+      run: |
+        VERSION="$(git describe --tags --always)"
+        go build -ldflags "-X main.Version=$VERSION" -v ./cmd/...
+
+    - name: Test
+      run: go test -v ./...
+
+    - name: Package
+      run: |
+        VERSION="$(git describe --tags --always)"
+        DIR="$(mktemp -d)"
+        mkdir "$DIR/age-plugin-fido2-hmac"
+        cp LICENSE "$DIR/age-plugin-fido2-hmac"
+        mv age-plugin-fido2-hmac "$DIR/age-plugin-fido2-hmac"
+        if [ "$GOOS" == "windows" ]; then
+          ( cd "$DIR"; zip age-plugin-fido2-hmac.zip -r age-plugin-fido2-hmac )
+          mv "$DIR/age-plugin-fido2-hmac.zip" "age-plugin-fido2-hmac-$VERSION-$GOOS-$GOARCH.zip"
+        else
+          tar -cvzf "age-plugin-fido2-hmac-$VERSION-$GOOS-$GOARCH.tar.gz" -C "$DIR" age-plugin-fido2-hmac
+        fi
+      env:
+        GOOS: ${{ matrix.GOOS }}
+        GOARCH: ${{ matrix.GOARCH }}
+        GOARM: ${{ matrix.GOARM }}
+
+    - name: Upload workflow artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: plugin-binaries
+        path: age-plugin-fido2-hmac*
+
+  release:
+    name: Upload release binaries
+    if: github.event_name == 'release'
+    needs: build
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download workflow artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: plugin-binaries
+      - name: Upload release artifacts
+        run: gh release upload "$GITHUB_REF_NAME" age-plugin-fido2-hmac*
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
