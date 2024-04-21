@@ -1,8 +1,8 @@
 module github.com/olastor/age-plugin-fido2-hmac
 
-go 1.21
+go 1.22
 
-toolchain go1.21.5
+toolchain go1.22.1
 
 require (
 	filippo.io/age v1.1.2-0.20230920124100-101cc8676386
