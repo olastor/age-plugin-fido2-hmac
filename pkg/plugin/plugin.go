@@ -167,6 +167,7 @@ func StanzaToIdentity(stanza *age.Stanza) (*Fido2HmacIdentity, error) {
 	}
 
 	return &Fido2HmacIdentity{
+		Version:    2,
 		RequirePin: requirePin[0] == byte(1),
 		Salt:       salt,
 		CredId:     credId,
