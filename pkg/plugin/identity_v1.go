@@ -77,6 +77,22 @@ func IdentityV1() error {
 		return fmt.Errorf("missing identity")
 	}
 
+	device, err := FindDevice()
+	if err != nil {
+		return err
+	}
+
+	if device == nil {
+		msg := "Please insert your token now."
+
+		sss.SendCommand("msg", []byte(msg), true)
+		device, err = WaitForDevice(120)
+
+		if err != nil {
+			return err
+		}
+	}
+
 	// make sure to first try the identities without pin
 	// this mixes up the indexes, so don't use them for errors
 	sort.SliceStable(identities, func(i, j int) bool {
