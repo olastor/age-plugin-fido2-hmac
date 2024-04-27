@@ -3,8 +3,8 @@ package plugin
 import (
 	"bufio"
 	"fmt"
-	"github.com/olastor/age-plugin-sss/pkg/sss"
 	"os"
+	"github.com/olastor/age-plugin-controller/pkg/controller"
 )
 
 func RecipientV1() error {
@@ -14,7 +14,7 @@ func RecipientV1() error {
 
 	scanner := bufio.NewScanner(os.Stdin)
 
-	err := sss.ProtocolHandler(scanner, func(command string, args []string, body []byte) (done bool, err error) {
+	err := controller.ProtocolHandler(scanner, func(command string, args []string, body []byte) (done bool, err error) {
 		switch command {
 		case "add-recipient":
 			if recipient != nil || identity != nil {
@@ -51,8 +51,8 @@ func RecipientV1() error {
 			return err
 		}
 
-		sss.SendCommand(StanzaArgsLine(stanzas[0]), stanzas[0].Body, true)
-		sss.SendCommand("done", nil, true)
+		controller.SendCommand(StanzaArgsLine(stanzas[0]), stanzas[0].Body, true)
+		controller.SendCommand("done", nil, true)
 
 		return nil
 	}
@@ -64,8 +64,8 @@ func RecipientV1() error {
 			return err
 		}
 
-		sss.SendCommand(StanzaArgsLine(stanzas[0]), stanzas[0].Body, true)
-		sss.SendCommand("done", nil, true)
+		controller.SendCommand(StanzaArgsLine(stanzas[0]), stanzas[0].Body, true)
+		controller.SendCommand("done", nil, true)
 
 		return nil
 	}

@@ -5,11 +5,11 @@ import (
 	"errors"
 	"filippo.io/age"
 	"fmt"
-	"github.com/keys-pub/go-libfido2"
-	"github.com/olastor/age-plugin-sss/pkg/sss"
 	"os"
 	"sort"
 	"strings"
+	"github.com/keys-pub/go-libfido2"
+	"github.com/olastor/age-plugin-controller/pkg/controller"
 )
 
 func IdentityV1() error {
@@ -18,7 +18,7 @@ func IdentityV1() error {
 
 	scanner := bufio.NewScanner(os.Stdin)
 
-	err := sss.ProtocolHandler(scanner, func(command string, args []string, body []byte) (done bool, err error) {
+	err := controller.ProtocolHandler(scanner, func(command string, args []string, body []byte) (done bool, err error) {
 		switch command {
 		case "add-identity":
 			if args[0] == MAGIC_IDENTITY || !strings.HasPrefix(args[0], strings.ToUpper(IDENTITY_HRP)) {
@@ -85,7 +85,7 @@ func IdentityV1() error {
 	if device == nil {
 		msg := "Please insert your token now."
 
-		sss.SendCommand("msg", []byte(msg), true)
+		controller.SendCommand("msg", []byte(msg), true)
 		device, err = WaitForDevice(120)
 
 		if err != nil {
@@ -132,7 +132,7 @@ func IdentityV1() error {
 		identityPin := ""
 		if pin == "" && i.RequirePin {
 			msg := "Please enter your PIN:"
-			pin, err = sss.RequestValue(msg, true)
+			pin, err = controller.RequestValue(msg, true)
 
 			if err != nil {
 				return err
@@ -158,8 +158,8 @@ func IdentityV1() error {
 			continue
 		}
 
-		sss.SendCommand("file-key 0", []byte(key), false)
-		sss.SendCommand("done", nil, true)
+		controller.SendCommand("file-key 0", []byte(key), false)
+		controller.SendCommand("done", nil, true)
 
 		return nil
 	}

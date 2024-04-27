@@ -5,16 +5,16 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
-	"filippo.io/age"
 	"fmt"
-	"github.com/olastor/age-plugin-fido2-hmac/internal/bech32"
-	"github.com/olastor/age-plugin-fido2-hmac/internal/mlock"
-	"github.com/olastor/age-plugin-sss/pkg/sss"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/term"
 	"os"
 	"slices"
 	"strings"
+	"filippo.io/age"
+	"github.com/olastor/age-plugin-fido2-hmac/internal/bech32"
+	"github.com/olastor/age-plugin-fido2-hmac/internal/mlock"
+	"github.com/olastor/age-plugin-controller/pkg/controller"
 )
 
 var b64 = base64.RawStdEncoding.Strict()
@@ -339,7 +339,7 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(isPlugin bool, pin string) err
 		msg := "Please insert your token now."
 
 		if isPlugin {
-			sss.SendCommand("msg", []byte(msg), true)
+			controller.SendCommand("msg", []byte(msg), true)
 		} else {
 			fmt.Fprintf(os.Stderr, "[*] %s\n", msg)
 		}
@@ -353,7 +353,7 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(isPlugin bool, pin string) err
 	if i.RequirePin && pin == "" {
 		msg := "Please enter your PIN:"
 		if isPlugin {
-			pin, err = sss.RequestValue(msg, true)
+			pin, err = controller.RequestValue(msg, true)
 			if err != nil {
 				return err
 			}
@@ -370,7 +370,7 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(isPlugin bool, pin string) err
 
 	msg := "Please touch your token..."
 	if isPlugin {
-		sss.SendCommand("msg", []byte(msg), true)
+		controller.SendCommand("msg", []byte(msg), true)
 	} else {
 		fmt.Fprintf(os.Stderr, "[*] %s\n", msg)
 	}
@@ -389,7 +389,7 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(isPlugin bool, pin string) err
 	if err != nil {
 		msg := fmt.Sprintf("Warning: Failed to call mlock: %s", err)
 		if isPlugin {
-			sss.SendCommand("msg", []byte(msg), true)
+			controller.SendCommand("msg", []byte(msg), true)
 		} else {
 			fmt.Fprintf(os.Stderr, "[*] %s\n", msg)
 		}

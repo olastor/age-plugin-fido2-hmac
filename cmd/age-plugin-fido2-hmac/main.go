@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/keys-pub/go-libfido2"
 	"github.com/olastor/age-plugin-fido2-hmac/pkg/plugin"
-	"github.com/olastor/age-plugin-sss/pkg/sss"
+	"github.com/olastor/age-plugin-controller/pkg/controller"
 	"os"
 	"strings"
 )
@@ -101,7 +101,7 @@ func main() {
 
 	if pluginFlag == "recipient-v1" {
 		if err := plugin.RecipientV1(); err != nil {
-			sss.SendCommand("error", []byte(err.Error()), false)
+			controller.SendCommand("error", []byte(err.Error()), false)
 			os.Exit(1)
 		}
 		os.Exit(0)
@@ -109,7 +109,7 @@ func main() {
 
 	if pluginFlag == "identity-v1" {
 		if err := plugin.IdentityV1(); err != nil {
-			sss.SendCommand("error", []byte(err.Error()), false)
+			controller.SendCommand("error", []byte(err.Error()), false)
 			os.Exit(1)
 		}
 		os.Exit(0)
