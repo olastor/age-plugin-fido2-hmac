@@ -4,8 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/keys-pub/go-libfido2"
-	"github.com/olastor/age-plugin-fido2-hmac/pkg/plugin"
 	"github.com/olastor/age-plugin-controller/pkg/controller"
+	"github.com/olastor/age-plugin-fido2-hmac/pkg/plugin"
 	"os"
 	"strings"
 )

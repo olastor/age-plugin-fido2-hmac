@@ -3,8 +3,8 @@ package plugin
 import (
 	"bufio"
 	"fmt"
-	"os"
 	"github.com/olastor/age-plugin-controller/pkg/controller"
+	"os"
 )
 
 func RecipientV1() error {

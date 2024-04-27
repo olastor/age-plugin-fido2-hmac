@@ -5,16 +5,16 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
+	"filippo.io/age"
 	"fmt"
+	"github.com/olastor/age-plugin-controller/pkg/controller"
+	"github.com/olastor/age-plugin-fido2-hmac/internal/bech32"
+	"github.com/olastor/age-plugin-fido2-hmac/internal/mlock"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/term"
 	"os"
 	"slices"
 	"strings"
-	"filippo.io/age"
-	"github.com/olastor/age-plugin-fido2-hmac/internal/bech32"
-	"github.com/olastor/age-plugin-fido2-hmac/internal/mlock"
-	"github.com/olastor/age-plugin-controller/pkg/controller"
 )
 
 var b64 = base64.RawStdEncoding.Strict()

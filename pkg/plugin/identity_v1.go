@@ -5,11 +5,11 @@ import (
 	"errors"
 	"filippo.io/age"
 	"fmt"
+	"github.com/keys-pub/go-libfido2"
+	"github.com/olastor/age-plugin-controller/pkg/controller"
 	"os"
 	"sort"
 	"strings"
-	"github.com/keys-pub/go-libfido2"
-	"github.com/olastor/age-plugin-controller/pkg/controller"
 )
 
 func IdentityV1() error {
