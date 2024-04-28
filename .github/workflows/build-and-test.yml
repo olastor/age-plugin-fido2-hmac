@@ -62,7 +62,7 @@ jobs:
       uses: Homebrew/actions/setup-homebrew@master
 
     - name: Install libfido2
-      run: brew install libfido2 openssl@3
+      run: brew install libfido2
 
     - name: Test
       run: go test -v ./...
