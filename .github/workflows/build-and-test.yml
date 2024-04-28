@@ -164,11 +164,11 @@ jobs:
   #       CGO_ENABLED: ${{ env.CGO_ENABLED }}
   #       GOARCH: amd64
 
-    - name: Upload workflow artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: plugin-binaries-windows-amd64
-        path: age-plugin-fido2-hmac*
+    # - name: Upload workflow artifacts
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     name: plugin-binaries-windows-amd64
+    #     path: age-plugin-fido2-hmac*
 
   release:
     name: Upload release binaries
@@ -182,7 +182,10 @@ jobs:
         uses: actions/download-artifact@v4
 
       - name: Upload release artifacts
-        run: gh release upload "$GITHUB_REF_NAME" age-plugin-fido2-hmac*
+        run: |
+          gh release upload "$GITHUB_REF_NAME" plugin-binaries-darwin-amd64/age-plugin-fido2-hmac*
+          gh release upload "$GITHUB_REF_NAME" plugin-binaries-darwin-arm64/age-plugin-fido2-hmac*
+          gh release upload "$GITHUB_REF_NAME" plugin-binaries-linux/age-plugin-fido2-hmac*
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
