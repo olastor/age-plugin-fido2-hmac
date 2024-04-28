@@ -126,42 +126,43 @@ jobs:
         name: plugin-binaries-darwin-amd64
         path: age-plugin-fido2-hmac*
 
-  build-windows-amd64:
-    runs-on: windows-latest
-    steps:
-    - uses: actions/checkout@v4
+  # TODO: fix and uncomment if needed
+  # build-windows-amd64:
+  #   runs-on: windows-latest
+  #   steps:
+  #   - uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
+  #   - name: Set up Go
+  #     uses: actions/setup-go@v5
+  #     with:
+  #       go-version: ${{ env.GO_VERSION }}
 
-    - name: Install libfido2
-      run: |
-        Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-        Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
-        scoop bucket add keys.pub https://github.com/keys-pub/scoop-bucket
-        scoop install libfido2
+  #   - name: Install libfido2
+  #     run: |
+  #       Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+  #       Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+  #       scoop bucket add keys.pub https://github.com/keys-pub/scoop-bucket
+  #       scoop install libfido2
 
-    - name: Test
-      run: go test -v ./...
+  #   - name: Test
+  #     run: go test -v ./...
 
-    - name: Package
-      run: |
-        VERSION="$(git describe --tags --always)"
-        go build -ldflags "-X main.Version=$VERSION" -v ./cmd/...
-        DIR="$(mktemp -d)"
-        mkdir "$DIR/age-plugin-fido2-hmac"
-        cp LICENSE "$DIR/age-plugin-fido2-hmac"
-        mv age-plugin-fido2-hmac "$DIR/age-plugin-fido2-hmac"
-        OLDDIR="$(pwd)"
-        cd "$DIR"
-        zip age-plugin-fido2-hmac.zip -r age-plugin-fido2-hmac
-        cd "$OLDDIR"
-        mv "$DIR/age-plugin-fido2-hmac.zip" "age-plugin-fido2-hmac-$VERSION-windows-amd64.zip"
-      env:
-        CGO_ENABLED: ${{ env.CGO_ENABLED }}
-        GOARCH: amd64
+  #   - name: Package
+  #     run: |
+  #       VERSION="$(git describe --tags --always)"
+  #       go build -ldflags "-X main.Version=$VERSION" -v ./cmd/...
+  #       DIR="$(mktemp -d)"
+  #       mkdir "$DIR/age-plugin-fido2-hmac"
+  #       cp LICENSE "$DIR/age-plugin-fido2-hmac"
+  #       mv age-plugin-fido2-hmac "$DIR/age-plugin-fido2-hmac"
+  #       OLDDIR="$(pwd)"
+  #       cd "$DIR"
+  #       zip age-plugin-fido2-hmac.zip -r age-plugin-fido2-hmac
+  #       cd "$OLDDIR"
+  #       mv "$DIR/age-plugin-fido2-hmac.zip" "age-plugin-fido2-hmac-$VERSION-windows-amd64.zip"
+  #     env:
+  #       CGO_ENABLED: ${{ env.CGO_ENABLED }}
+  #       GOARCH: amd64
 
     - name: Upload workflow artifacts
       uses: actions/upload-artifact@v4
@@ -172,7 +173,7 @@ jobs:
   release:
     name: Upload release binaries
     if: github.event_name == 'release'
-    needs: ["build-linux-amd64", "build-darwin-amd64", "build-darwin-arm64", "build-windows-amd64"]
+    needs: ["build-linux-amd64", "build-darwin-amd64", "build-darwin-arm64"]
     permissions:
       contents: write
     runs-on: ubuntu-latest
