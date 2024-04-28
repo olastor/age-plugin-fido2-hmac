@@ -154,7 +154,10 @@ jobs:
         mkdir "$DIR/age-plugin-fido2-hmac"
         cp LICENSE "$DIR/age-plugin-fido2-hmac"
         mv age-plugin-fido2-hmac "$DIR/age-plugin-fido2-hmac"
-        ( cd "$DIR"; zip age-plugin-fido2-hmac.zip -r age-plugin-fido2-hmac )
+        OLDDIR="$(pwd)"
+        cd "$DIR"
+        zip age-plugin-fido2-hmac.zip -r age-plugin-fido2-hmac
+        cd "$OLDDIR"
         mv "$DIR/age-plugin-fido2-hmac.zip" "age-plugin-fido2-hmac-$VERSION-windows-amd64.zip"
       env:
         CGO_ENABLED: ${{ env.CGO_ENABLED }}
