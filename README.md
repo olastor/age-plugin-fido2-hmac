@@ -18,9 +18,39 @@
 - [age](https://github.com/FiloSottile/age) (>= 1.1.0) or [rage](https://github.com/str4d/rage)
 - [libfido2](https://developers.yubico.com/libfido2/)
 
+**Ubuntu (>= 20.04)**
+
+```bash
+sudo apt install libfido2-1 libfido2-dev libfido2-doc fido2-tools
+```
+
+**Fedora (>= 34)**
+
+```bash
+sudo dnf install libfido2 libfido2-devel fido2-tools
+```
+
+**Mac OS**
+
+```bash
+brew install libfido2
+```
+
 ## Installation
 
 Download a the latest binary from the [release page](https://github.com/olastor/age-plugin-fido2-hmac/releases). Copy the binary to your `$PATH` (preferably in `$(which age)`) and make sure it's executable.
+
+You can also use the following script for installation:
+
+- Installs binary to `~/.local/bin/age-plugin-fido2-hmac` (change to your preferred directory)
+- Make sure to adjust `OS` and `ARCH` if needed (`OS=darwin ARCH=arm64` for Apple Silicon, `OS=darwin ARCH=amd64` for older Macs)
+
+```bash
+cd "$(mktemp -d)"
+VERSION=v0.2.2 OS=linux ARCH=amd64; curl -L "https://github.com/olastor/age-plugin-fido2-hmac/releases/download/$VERSION/age-plugin-fido2-hmac-$VERSION-$OS-$ARCH.tar.gz" -o age-plugin-fido2-hmac.tar.gz
+tar -xzf age-plugin-fido2-hmac.tar.gz
+mv age-plugin-fido2-hmac/age-plugin-fido2-hmac ~/.local/bin
+```
 
 ## Build from source
 
