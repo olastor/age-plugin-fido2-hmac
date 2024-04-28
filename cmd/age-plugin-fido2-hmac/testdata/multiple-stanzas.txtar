@@ -1,0 +1,40 @@
+# fido key must have pin 1234
+
+exec age-keygen
+cp stdout identity0.txt
+
+ttyin -stdin yes-pin-no-identity
+exec age-plugin-fido2-hmac -g
+cp stdout identity1.txt
+
+ttyin -stdin no-pin-yes-identity
+exec age-plugin-fido2-hmac -g
+cp stdout identity2.txt
+
+exec bash -c 'cat identity0.txt identity1.txt identity2.txt | grep -oP "age1.*" > recipients.txt'
+
+exec age -R recipients.txt -o ciphertext plaintext
+
+ttyin -stdin pin
+exec age -d -o plaintext1 -i identity1.txt ciphertext
+cmp plaintext plaintext1
+
+exec age -d -o plaintext2 -i identity2.txt ciphertext
+cmp plaintext plaintext2
+
+-- pin --
+1234
+-- yes-pin-no-identity --
+1234
+y
+n
+
+-- no-pin-yes-identity --
+1234
+n
+y
+
+-- magic.txt --
+AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76
+-- plaintext --
+this is the plaintext

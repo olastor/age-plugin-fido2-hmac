@@ -37,10 +37,6 @@ func IdentityV1() error {
 				return false, nil
 			}
 
-			if stanzas != nil {
-				return false, errors.New("Decrypting multiple stanzas not supported")
-			}
-
 			stanzas = append(stanzas, &age.Stanza{
 				Type: args[1],
 				Args: args[2:],
