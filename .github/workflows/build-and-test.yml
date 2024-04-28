@@ -32,17 +32,13 @@ jobs:
     - name: Install libfido2
       run: sudo apt install libfido2-1 libfido2-dev libfido2-doc fido2-tools
 
-    - name: Build
-      run: |
-        VERSION="$(git describe --tags --always)"
-        go build -ldflags "-X main.Version=$VERSION" -v ./cmd/...
-
     - name: Test
       run: go test -v ./...
 
     - name: Package
       run: |
         VERSION="$(git describe --tags --always)"
+        go build -ldflags "-X main.Version=$VERSION" -v ./cmd/...
         DIR="$(mktemp -d)"
         mkdir "$DIR/age-plugin-fido2-hmac"
         cp LICENSE "$DIR/age-plugin-fido2-hmac"
