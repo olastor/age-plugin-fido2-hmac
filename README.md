@@ -52,6 +52,8 @@ tar -xzf age-plugin-fido2-hmac.tar.gz
 mv age-plugin-fido2-hmac/age-plugin-fido2-hmac ~/.local/bin
 ```
 
+Please note that Windows builds are currently not enabled, but if you need them please open a new issue and I'll try to look into it.
+
 ## Build from source
 
 ```bash
