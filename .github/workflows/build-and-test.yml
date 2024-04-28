@@ -44,7 +44,7 @@ jobs:
     - name: Upload workflow artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: plugin-binaries
+        name: plugin-binaries-linux
         path: age-plugin-fido2-hmac*
 
   build-darwin-amd64:
@@ -82,7 +82,7 @@ jobs:
     - name: Upload workflow artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: plugin-binaries
+        name: plugin-binaries-darwin
         path: age-plugin-fido2-hmac*
 
   release:
@@ -94,9 +94,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download workflow artifacts
-        uses: actions/download-artifact@v2
-        with:
-          name: plugin-binaries
+        uses: actions/download-artifact@v4
+
       - name: Upload release artifacts
         run: gh release upload "$GITHUB_REF_NAME" age-plugin-fido2-hmac*
         env:
