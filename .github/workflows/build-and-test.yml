@@ -136,7 +136,6 @@ jobs:
       with:
         go-version: ${{ env.GO_VERSION }}
 
-    - uses: MinoruSekine/setup-scoop@v2
     - name: Install libfido2
       run: |
         Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
@@ -169,7 +168,7 @@ jobs:
   release:
     name: Upload release binaries
     if: github.event_name == 'release'
-    needs: ["build-linux-amd64", "build-darwin-amd64", "build-darwin-arm64", "build-windows-arm64"]
+    needs: ["build-linux-amd64", "build-darwin-amd64", "build-darwin-arm64", "build-windows-amd64"]
     permissions:
       contents: write
     runs-on: ubuntu-latest
