@@ -40,6 +40,7 @@ jobs:
         tar -cvzf "age-plugin-fido2-hmac-$VERSION-linux-amd64.tar.gz" -C "$DIR" age-plugin-fido2-hmac
       env:
         CGO_ENABLED: ${{ env.CGO_ENABLED }}
+        GOARCH: amd64
 
     - name: Upload workflow artifacts
       uses: actions/upload-artifact@v4
