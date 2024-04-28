@@ -45,7 +45,7 @@ jobs:
     - name: Upload workflow artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: plugin-binaries-linux
+        name: plugin-binaries-darwin-arm64
         path: age-plugin-fido2-hmac*
 
   build-darwin-arm64:
