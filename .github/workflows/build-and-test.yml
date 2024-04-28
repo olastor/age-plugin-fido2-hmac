@@ -50,6 +50,7 @@ jobs:
           tar -cvzf "age-plugin-fido2-hmac-$VERSION-$GOOS-$GOARCH.tar.gz" -C "$DIR" age-plugin-fido2-hmac
         fi
       env:
+        CGO_ENABLED: 0
         GOOS: ${{ matrix.GOOS }}
         GOARCH: ${{ matrix.GOARCH }}
         GOARM: ${{ matrix.GOARM }}
