@@ -3,11 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/keys-pub/go-libfido2"
-	"github.com/olastor/age-plugin-controller/pkg/controller"
-	"github.com/olastor/age-plugin-fido2-hmac/pkg/plugin"
 	"os"
 	"strings"
+
+	"filippo.io/age"
+	page "filippo.io/age/plugin"
+	"github.com/keys-pub/go-libfido2"
+	"github.com/olastor/age-plugin-fido2-hmac/pkg/plugin"
 )
 
 var Version string
@@ -100,17 +102,50 @@ func main() {
 	}
 
 	if pluginFlag == "recipient-v1" {
-		if err := plugin.RecipientV1(); err != nil {
-			controller.SendCommand("error", []byte(err.Error()), false)
-			os.Exit(1)
+		p, err := page.New("fido2-hmac")
+		if err != nil {
+      os.Exit(1)
+		}
+		p.HandleRecipient(func(data []byte) (age.Recipient, error) {
+			r, err := plugin.ParseFido2HmacRecipient(page.EncodeRecipient("fido2-hmac", data))
+			if err != nil {
+				return nil, err
+			}
+			return r, nil
+		})
+		p.HandleIdentityAsRecipient(func(data []byte) (age.Recipient, error) {
+			i, err := plugin.ParseFido2HmacIdentity(page.EncodeIdentity("fido2-hmac", data))
+
+			if err != nil {
+				return nil, err
+			}
+
+      i.Plugin = p
+      i.ObtainSecretFromToken("")
+
+			return i, nil
+		})
+		if exitCode := p.RecipientV1(); exitCode != 0 {
+      os.Exit(exitCode)
 		}
 		os.Exit(0)
 	}
 
 	if pluginFlag == "identity-v1" {
-		if err := plugin.IdentityV1(); err != nil {
-			controller.SendCommand("error", []byte(err.Error()), false)
-			os.Exit(1)
+		p, err := page.New("fido2-hmac")
+		if err != nil {
+      os.Exit(1)
+		}
+		p.HandleIdentity(func(data []byte) (age.Identity, error) {
+			i, err := plugin.ParseFido2HmacIdentity(page.EncodeIdentity("fido2-hmac", data))
+			if err != nil {
+				return nil, err
+			}
+      i.Plugin = p
+			return i, nil
+		})
+		if exitCode := p.IdentityV1(); exitCode != 0 {
+      os.Exit(exitCode)
 		}
 		os.Exit(0)
 	}

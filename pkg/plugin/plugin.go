@@ -4,16 +4,16 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
-	"errors"
 	"filippo.io/age"
+	page "filippo.io/age/plugin"
 	"fmt"
-	"github.com/olastor/age-plugin-controller/pkg/controller"
 	"github.com/olastor/age-plugin-fido2-hmac/internal/bech32"
 	"github.com/olastor/age-plugin-fido2-hmac/internal/mlock"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/term"
 	"os"
 	"slices"
+  "sort"
 	"strings"
 )
 
@@ -42,8 +42,19 @@ type Fido2HmacIdentity struct {
 	RequirePin bool
 	Salt       []byte
 	CredId     []byte
-
+  Plugin      *page.Plugin
 	legacyNonce []byte
+}
+
+// data structure for stanza with parsed args
+type Fido2HmacStanza struct {
+	Version     uint16
+	RequirePin  bool
+	Salt        []byte
+	CredId      []byte
+  X25519Share string
+	legacyNonce []byte
+  Body        []byte
 }
 
 func ParseFido2HmacRecipient(recipient string) (*Fido2HmacRecipient, error) {
@@ -82,7 +93,9 @@ func ParseFido2HmacRecipient(recipient string) (*Fido2HmacRecipient, error) {
 
 func ParseFido2HmacIdentity(identity string) (*Fido2HmacIdentity, error) {
 	if identity == MAGIC_IDENTITY {
-		return nil, fmt.Errorf("cannot create identity from magic identity")
+		return &Fido2HmacIdentity{
+      Version:    2,
+		}, nil
 	}
 
 	hrp, data, err := bech32.Decode(strings.ToLower(identity))
@@ -118,60 +131,68 @@ func ParseFido2HmacIdentity(identity string) (*Fido2HmacIdentity, error) {
 	}
 }
 
-func StanzaToIdentity(stanza *age.Stanza) (*Fido2HmacIdentity, error) {
+func ParseFido2HmacStanza(stanza *age.Stanza) (*Fido2HmacStanza, error) {
+  stanzaData := &Fido2HmacStanza{Body: stanza.Body}
+
 	stanzaVersionBytes, err := b64.DecodeString(stanza.Args[0])
 	if err != nil {
 		return nil, err
 	}
 
-	if len(stanzaVersionBytes) == 32 {
-		// v1 format
-		salt, err1 := b64.DecodeString(stanza.Args[0])
-		nonce, err2 := b64.DecodeString(stanza.Args[1])
+  // v1 format has no stanza version, so it's recognized by length of salt instead
+  if len(stanzaVersionBytes) == 32 {
+    stanzaData.Version = 1
+  } else {
+    stanzaData.Version = binary.BigEndian.Uint16(stanzaVersionBytes)
+  }
 
-		if err := errors.Join(err1, err2); err != nil {
-			return nil, err
-		}
+	switch stanzaData.Version {
+	case 1:
+    if len(stanza.Args) != 2 && len(stanza.Args) != 4 {
+      return nil, fmt.Errorf("invalid length of stanza args: %d", len(stanza.Args))
+    }
 
-		identity := &Fido2HmacIdentity{
-			Version:     1,
-			RequirePin:  false,
-			Salt:        salt,
-			CredId:      nil,
-			legacyNonce: nonce,
-		}
+		stanzaData.Salt, err = b64.DecodeString(stanza.Args[0])
+    if err != nil {
+      return nil, fmt.Errorf("salt in stanza is malformed")
+    }
 
-		if len(stanza.Args) == 4 {
-			identity.RequirePin = stanza.Args[2] == "AQ"
-			credId, err3 := b64.DecodeString(stanza.Args[3])
-			if err3 != nil {
-				return nil, err
-			}
-			identity.CredId = credId
-		}
+		stanzaData.legacyNonce, err = b64.DecodeString(stanza.Args[1])
+    if err != nil {
+      return nil, fmt.Errorf("nonce in stanza is malformed")
+    }
 
-		return identity, nil
+    if len(stanza.Args) == 4 {
+      stanzaData.RequirePin = stanza.Args[2] == "AQ"
+      stanzaData.CredId, err = b64.DecodeString(stanza.Args[3])
+      if err != nil {
+        return nil, fmt.Errorf("cred id in stanza is malformed")
+      }
+    }
+	case 2:
+		stanzaData.X25519Share = stanza.Args[1]
+
+    requirePin, err := b64.DecodeString(stanza.Args[2])
+    if err != nil {
+      return nil, fmt.Errorf("require pin flag in stanza is malformed")
+    }
+    stanzaData.RequirePin = requirePin[0] == byte(1)
+
+		stanzaData.Salt, err = b64.DecodeString(stanza.Args[3])
+    if err != nil {
+      return nil, fmt.Errorf("salt in stanza is malformed")
+    }
+
+    stanzaData.CredId, err = b64.DecodeString(stanza.Args[4])
+    if err != nil {
+      return nil, fmt.Errorf("cred id in stanza is malformed")
+    }
+
+	default:
+		return nil, fmt.Errorf("unsupported stanza version %d", stanzaData.Version)
 	}
 
-	stanzaVersion := binary.BigEndian.Uint16(stanzaVersionBytes)
-	if stanzaVersion != STANZA_FORMAT_VERSION {
-		return nil, fmt.Errorf("Unsupported stanza version %x", stanzaVersion)
-	}
-
-	requirePin, err1 := b64.DecodeString(stanza.Args[2])
-	salt, err2 := b64.DecodeString(stanza.Args[3])
-	credId, err3 := b64.DecodeString(stanza.Args[4])
-
-	if err := errors.Join(err1, err2, err3); err != nil {
-		return nil, err
-	}
-
-	return &Fido2HmacIdentity{
-		Version:    2,
-		RequirePin: requirePin[0] == byte(1),
-		Salt:       salt,
-		CredId:     credId,
-	}, nil
+  return stanzaData, nil
 }
 
 func StanzaArgsLine(stanza *age.Stanza) string {
@@ -312,10 +333,6 @@ func (i *Fido2HmacIdentity) Recipient() (*Fido2HmacRecipient, error) {
 			return nil, err
 		}
 
-		if err != nil {
-			return nil, err
-		}
-
 		return &Fido2HmacRecipient{
 			Version:        2,
 			TheirPublicKey: theirPublicKey,
@@ -329,7 +346,7 @@ func (i *Fido2HmacIdentity) Recipient() (*Fido2HmacRecipient, error) {
 }
 
 // the pin can be passed if it's known already to avoid re-asking, but it's optional
-func (i *Fido2HmacIdentity) ObtainSecretFromToken(isPlugin bool, pin string) error {
+func (i *Fido2HmacIdentity) ObtainSecretFromToken(pin string) error {
 	device, err := FindDevice()
 	if err != nil {
 		return err
@@ -338,8 +355,11 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(isPlugin bool, pin string) err
 	if device == nil {
 		msg := "Please insert your token now."
 
-		if isPlugin {
-			controller.SendCommand("msg", []byte(msg), true)
+		if i.Plugin != nil {
+      err := i.Plugin.DisplayMessage(msg)
+      if err != nil {
+        return err
+      }
 		} else {
 			fmt.Fprintf(os.Stderr, "[*] %s\n", msg)
 		}
@@ -352,11 +372,12 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(isPlugin bool, pin string) err
 
 	if i.RequirePin && pin == "" {
 		msg := "Please enter your PIN:"
-		if isPlugin {
-			pin, err = controller.RequestValue(msg, true)
-			if err != nil {
-				return err
-			}
+		if i.Plugin != nil {
+      var err error
+      pin, err = i.Plugin.RequestValue(msg, true)
+      if err != nil {
+        return err
+      }
 		} else {
 			fmt.Fprintf(os.Stderr, "[*] %s\n", msg)
 			pinBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
@@ -368,9 +389,12 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(isPlugin bool, pin string) err
 		}
 	}
 
-	msg := "Please touch your token..."
-	if isPlugin {
-		controller.SendCommand("msg", []byte(msg), true)
+	msg := "Please touch your token"
+	if i.Plugin != nil {
+    err := i.Plugin.DisplayMessage(msg)
+    if err != nil {
+      return err
+    }
 	} else {
 		fmt.Fprintf(os.Stderr, "[*] %s\n", msg)
 	}
@@ -388,8 +412,8 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(isPlugin bool, pin string) err
 	err = mlock.Mlock(i.secretKey)
 	if err != nil {
 		msg := fmt.Sprintf("Warning: Failed to call mlock: %s", err)
-		if isPlugin {
-			controller.SendCommand("msg", []byte(msg), true)
+		if i.Plugin != nil {
+      i.Plugin.DisplayMessage(msg)
 		} else {
 			fmt.Fprintf(os.Stderr, "[*] %s\n", msg)
 		}
@@ -415,7 +439,7 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 			return nil, err
 		}
 
-		err := i.ObtainSecretFromToken(true, "")
+		err := i.ObtainSecretFromToken("")
 		if err != nil {
 			return nil, err
 		}
@@ -430,9 +454,6 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 		}
 
 		ciphertext := aead.Seal(nil, i.legacyNonce, fileKey, nil)
-		if err != nil {
-			return nil, err
-		}
 
 		stanzaArgs := make([]string, 2)
 		stanzaArgs[0] = b64.EncodeToString(i.Salt)
@@ -446,7 +467,7 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 
 		return []*age.Stanza{stanza}, nil
 	case 2:
-		err := i.ObtainSecretFromToken(true, "")
+		err := i.ObtainSecretFromToken("")
 		if err != nil {
 			return nil, err
 		}
@@ -473,52 +494,145 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 }
 
 func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
+	var pluginStanzas []*Fido2HmacStanza
 	var x25519Stanzas []*age.Stanza
 
 	for _, stanza := range stanzas {
 		if stanza.Type == PLUGIN_NAME {
-			stanzaVersion, err := b64.DecodeString(stanza.Args[0])
-			if err != nil {
-				return nil, err
-			}
+      stanzaData, err := ParseFido2HmacStanza(stanza)
+      if err != nil {
+        return nil, err
+      }
 
-			if len(stanzaVersion) == 32 {
-				// v1 format has no stanza version, recognized by length of salt
-				if i.Version != 1 {
-					continue
-				}
-
-				aead, err := chacha20poly1305.New(i.secretKey)
-				if err != nil {
-					return nil, err
-				}
-
-				plaintext, err := aead.Open(nil, i.legacyNonce, stanza.Body, nil)
-				mlock.Mlock(plaintext)
-
-				if err != nil {
-					return nil, err
-				}
-
-				return plaintext, nil
-			}
-
-			x25519Stanzas = append(x25519Stanzas, &age.Stanza{
-				Type: "X25519",
-				Args: []string{stanza.Args[1]},
-				Body: stanza.Body,
-			})
-		} else if stanza.Type == "X25519" {
+			pluginStanzas = append(pluginStanzas, stanzaData)
+		} else if stanza.Type == "X25519" && i.Version == 2 {
 			x25519Stanzas = append(x25519Stanzas, stanza)
 		}
 	}
 
-	x25519Identity, err := i.X25519Identity()
+  if len(pluginStanzas) + len(x25519Stanzas) == 0 {
+    return nil, fmt.Errorf("no stanza is supported")
+  }
+
+	device, err := FindDevice()
 	if err != nil {
 		return nil, err
 	}
 
-	return x25519Identity.Unwrap(x25519Stanzas)
+	if device == nil {
+		msg := "Please insert your token now."
+
+    i.Plugin.DisplayMessage(msg)
+		device, err = WaitForDevice(120)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// make sure to first try the identities without pin
+	// this mixes up the indexes, so don't use them for errors
+	sort.SliceStable(pluginStanzas, func(i, j int) bool {
+		return !pluginStanzas[i].RequirePin
+	})
+
+  // only ask once for the pin if needed and store it here temporarily thereafter
+  pin := ""
+
+  for _, fidoStanza := range pluginStanzas {
+    if fidoStanza.Version != i.Version {
+      continue
+    }
+
+    if (fidoStanza.CredId == nil) == (i.CredId == nil) {
+      // incompatible: cred id needs to exists exactly once in either stanza or identity
+      continue
+    }
+
+    if (i.RequirePin || fidoStanza.RequirePin) && pin == "" {
+
+      pin, err = i.Plugin.RequestValue("Please enter you PIN:", true)
+      if err != nil {
+        return nil, err
+      }
+    }
+
+    // some fields need to be copied over from the stanza
+    // create a temporary identity with this fields to preserve
+    // the original field values of i
+    id := *i
+    id.Salt = fidoStanza.Salt
+    id.legacyNonce = fidoStanza.legacyNonce
+    if i.CredId == nil {
+      id.CredId = fidoStanza.CredId
+      id.RequirePin = fidoStanza.RequirePin
+    }
+
+    // needs to be called for every stanza because at least the salt changed
+    err := id.ObtainSecretFromToken("")
+    if err != nil {
+      return nil, err
+    }
+
+    switch id.Version {
+    case 1:
+      aead, err := chacha20poly1305.New(id.secretKey)
+      if err != nil {
+        return nil, err
+      }
+
+      plaintext, err := aead.Open(nil, id.legacyNonce, fidoStanza.Body, nil)
+      mlock.Mlock(plaintext)
+
+      if err != nil {
+        continue
+      }
+
+      return plaintext, nil
+    case 2:
+      x25519Identity, err := id.X25519Identity()
+      if err != nil {
+        return nil, err
+      }
+
+      plaintext, err := x25519Identity.Unwrap([]*age.Stanza{&age.Stanza{
+				Type: "X25519",
+				Args: []string{string(fidoStanza.X25519Share)},
+				Body: fidoStanza.Body,
+			}})
+
+      if err != nil {
+        // TODO: differentiate error handling?
+        continue
+      }
+
+      return plaintext, nil
+    default:
+      return nil, fmt.Errorf("unsupported identity version %x", i.Version)
+    }
+  }
+
+  if len(x25519Stanzas) == 0 {
+    return nil, age.ErrIncorrectIdentity
+  }
+
+  if i.secretKey == nil {
+    i.ObtainSecretFromToken(pin)
+  }
+
+	x25519Identity, err := i.X25519Identity()
+	if err != nil {
+    return nil, err
+	}
+
+  fileKey, err := x25519Identity.Unwrap(x25519Stanzas)
+	if err != nil {
+    return nil, age.ErrIncorrectIdentity
+	}
+
+  i.ClearSecret()
+
+  return fileKey, nil
 }
 
 func (i *Fido2HmacIdentity) ClearSecret() {

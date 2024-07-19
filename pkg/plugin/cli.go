@@ -110,7 +110,7 @@ func GenerateNewCli(algorithm libfido2.CredentialType, symmetric bool) {
 			CredId:     credId,
 		}
 
-		err = identity.ObtainSecretFromToken(false, pin)
+		err = identity.ObtainSecretFromToken(pin)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 			os.Exit(1)
