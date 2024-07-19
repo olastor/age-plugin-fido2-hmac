@@ -104,7 +104,7 @@ func main() {
 	if pluginFlag == "recipient-v1" {
 		p, err := page.New("fido2-hmac")
 		if err != nil {
-      os.Exit(1)
+			os.Exit(1)
 		}
 		p.HandleRecipient(func(data []byte) (age.Recipient, error) {
 			r, err := plugin.ParseFido2HmacRecipient(page.EncodeRecipient("fido2-hmac", data))
@@ -120,13 +120,13 @@ func main() {
 				return nil, err
 			}
 
-      i.Plugin = p
-      i.ObtainSecretFromToken("")
+			i.Plugin = p
+			i.ObtainSecretFromToken("")
 
 			return i, nil
 		})
 		if exitCode := p.RecipientV1(); exitCode != 0 {
-      os.Exit(exitCode)
+			os.Exit(exitCode)
 		}
 		os.Exit(0)
 	}
@@ -134,18 +134,18 @@ func main() {
 	if pluginFlag == "identity-v1" {
 		p, err := page.New("fido2-hmac")
 		if err != nil {
-      os.Exit(1)
+			os.Exit(1)
 		}
 		p.HandleIdentity(func(data []byte) (age.Identity, error) {
 			i, err := plugin.ParseFido2HmacIdentity(page.EncodeIdentity("fido2-hmac", data))
 			if err != nil {
 				return nil, err
 			}
-      i.Plugin = p
+			i.Plugin = p
 			return i, nil
 		})
 		if exitCode := p.IdentityV1(); exitCode != 0 {
-      os.Exit(exitCode)
+			os.Exit(exitCode)
 		}
 		os.Exit(0)
 	}
