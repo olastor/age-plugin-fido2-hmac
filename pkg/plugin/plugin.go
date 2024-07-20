@@ -34,6 +34,7 @@ type Fido2HmacRecipient struct {
 	RequirePin     bool
 	Salt           []byte
 	CredId         []byte
+	Plugin         *page.Plugin
 }
 
 type Fido2HmacIdentity struct {
@@ -252,6 +253,7 @@ func (r *Fido2HmacRecipient) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 			Version:    1,
 			RequirePin: r.RequirePin,
 			CredId:     r.CredId,
+			Plugin:     r.Plugin,
 		}
 
 		stanzas, err := identity.Wrap(fileKey)
