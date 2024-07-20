@@ -541,6 +541,35 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 	// only ask once for the pin if needed and store it here temporarily thereafter
 	pin := ""
 
+	// if the version is two and there is a cred id we expect to unwrap x25519 stanzas
+	if i.Version == 2 && i.CredId != nil && len(x25519Stanzas) > 0 {
+		if i.secretKey == nil {
+			if i.RequirePin {
+				pin, err = i.Plugin.RequestValue("Please enter you PIN:", true)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			i.ObtainSecretFromToken(pin)
+		}
+
+		x25519Identity, err := i.X25519Identity()
+		if err != nil {
+			return nil, err
+		}
+
+		fileKey, err := x25519Identity.Unwrap(x25519Stanzas)
+		i.ClearSecret()
+
+		if err == nil {
+			// do not return an error here because it might be that there is
+			// still another plugin stanza that does not match the identity,
+			// but can decrypt with the fido2 token "standalone"
+			return fileKey, nil
+		}
+	}
+
 	for _, fidoStanza := range pluginStanzas {
 		if fidoStanza.CredId == nil && (i.CredId == nil || fidoStanza.Version != i.Version) {
 			// incompatible: cred id needs to exists in either stanza or identity
@@ -604,7 +633,7 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 
 			if err != nil {
 				// TODO: differentiate error handling?
-				continue
+				return nil, err
 			}
 
 			return plaintext, nil
@@ -613,27 +642,7 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 		}
 	}
 
-	if len(x25519Stanzas) == 0 {
-		return nil, age.ErrIncorrectIdentity
-	}
-
-	if i.secretKey == nil {
-		i.ObtainSecretFromToken(pin)
-	}
-
-	x25519Identity, err := i.X25519Identity()
-	if err != nil {
-		return nil, err
-	}
-
-	fileKey, err := x25519Identity.Unwrap(x25519Stanzas)
-	if err != nil {
-		return nil, age.ErrIncorrectIdentity
-	}
-
-	i.ClearSecret()
-
-	return fileKey, nil
+	return nil, age.ErrIncorrectIdentity
 }
 
 func (i *Fido2HmacIdentity) ClearSecret() {
