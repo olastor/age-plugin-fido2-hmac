@@ -530,27 +530,25 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 		}
 	}
 
-	// make sure to first try the identities without pin
 	// this mixes up the indexes, so don't use them for errors
-	sort.SliceStable(pluginStanzas, func(i, j int) bool {
-		return !pluginStanzas[i].RequirePin
+	sort.SliceStable(pluginStanzas, func(k, l int) bool {
+		// make sure to first try the identities without pin
+		return !pluginStanzas[k].RequirePin
 	})
 
 	// only ask once for the pin if needed and store it here temporarily thereafter
 	pin := ""
 
 	for _, fidoStanza := range pluginStanzas {
-		if fidoStanza.Version != i.Version {
-			continue
-		}
-
-		if (fidoStanza.CredId == nil) == (i.CredId == nil) {
-			// incompatible: cred id needs to exists exactly once in either stanza or identity
+		if fidoStanza.CredId == nil && (i.CredId == nil || fidoStanza.Version != i.Version) {
+			// incompatible: cred id needs to exists in either stanza or identity
+			// if the stanza contains the cred id, then we can basically ignore the identity
+			// because all relevant data is in the stanza. but if the stanza does not include
+			// the cred id, then the identity needs to hold it and must have a matching version
 			continue
 		}
 
 		if (i.RequirePin || fidoStanza.RequirePin) && pin == "" {
-
 			pin, err = i.Plugin.RequestValue("Please enter you PIN:", true)
 			if err != nil {
 				return nil, err
@@ -564,6 +562,7 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 		id.Salt = fidoStanza.Salt
 		id.legacyNonce = fidoStanza.legacyNonce
 		if i.CredId == nil {
+			id.Version = fidoStanza.Version
 			id.CredId = fidoStanza.CredId
 			id.RequirePin = fidoStanza.RequirePin
 		}
