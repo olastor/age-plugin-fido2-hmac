@@ -116,13 +116,11 @@ func main() {
 		})
 		p.HandleIdentityAsRecipient(func(data []byte) (age.Recipient, error) {
 			i, err := plugin.ParseFido2HmacIdentity(page.EncodeIdentity("fido2-hmac", data))
-
 			if err != nil {
 				return nil, err
 			}
 
 			i.Plugin = p
-			i.ObtainSecretFromToken("")
 
 			return i, nil
 		})

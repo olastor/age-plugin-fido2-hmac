@@ -570,7 +570,7 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 		}
 
 		// needs to be called for every stanza because at least the salt changed
-		err := id.ObtainSecretFromToken("")
+		err := id.ObtainSecretFromToken(pin)
 		if err != nil {
 			return nil, err
 		}
