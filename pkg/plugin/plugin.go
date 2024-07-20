@@ -551,7 +551,10 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 				}
 			}
 
-			i.ObtainSecretFromToken(pin)
+			err := i.ObtainSecretFromToken(pin)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		x25519Identity, err := i.X25519Identity()
