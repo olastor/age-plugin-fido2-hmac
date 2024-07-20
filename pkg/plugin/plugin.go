@@ -348,22 +348,22 @@ func (i *Fido2HmacIdentity) Recipient() (*Fido2HmacRecipient, error) {
 }
 
 // the pin can be passed if it's known already to avoid re-asking, but it's optional
-func (i *Fido2HmacIdentity) ObtainSecretFromToken(pin string) error {
+func (i *Fido2HmacIdentity) obtainSecretFromToken(pin string) (string, error) {
 	device, err := FindDevice()
 	if err != nil {
-		return err
+		return pin, err
 	}
 
 	if device == nil {
 		err := i.DisplayMessage("Please insert your token now.")
 		if err != nil {
-			return err
+			return pin, err
 		}
 
 		device, err = WaitForDevice(120)
 
 		if err != nil {
-			return err
+			return pin, err
 		}
 	}
 
@@ -373,13 +373,13 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(pin string) error {
 			var err error
 			pin, err = i.RequestSecret(msg)
 			if err != nil {
-				return err
+				return pin, err
 			}
 		} else {
 			fmt.Fprintf(os.Stderr, "[*] %s\n", msg)
 			pinBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
 			if err != nil {
-				return err
+				return pin, err
 			}
 
 			pin = string(pinBytes)
@@ -388,7 +388,7 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(pin string) error {
 
 	err = i.DisplayMessage("Please touch your token")
 	if err != nil {
-		return err
+		return pin, err
 	}
 
 	if i.RequirePin {
@@ -398,18 +398,18 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(pin string) error {
 	}
 
 	if err != nil {
-		return err
+		return pin, err
 	}
 
 	err = mlock.Mlock(i.secretKey)
 	if err != nil {
 		err = i.DisplayMessage(fmt.Sprintf("Warning: Failed to call mlock: %s", err))
 		if err != nil {
-			return err
+			return pin, err
 		}
 	}
 
-	return nil
+	return pin, nil
 }
 
 func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
@@ -429,7 +429,7 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 			return nil, err
 		}
 
-		err := i.ObtainSecretFromToken("")
+		_, err := i.obtainSecretFromToken("")
 		if err != nil {
 			return nil, err
 		}
@@ -457,7 +457,7 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 
 		return []*age.Stanza{stanza}, nil
 	case 2:
-		err := i.ObtainSecretFromToken("")
+		_, err := i.obtainSecretFromToken("")
 		if err != nil {
 			return nil, err
 		}
@@ -518,14 +518,7 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 	// if the version is two and there is a cred id we expect to unwrap x25519 stanzas
 	if i.Version == 2 && i.CredId != nil && len(x25519Stanzas) > 0 {
 		if i.secretKey == nil {
-			if i.RequirePin {
-				pin, err = i.RequestSecret("Please enter you PIN:")
-				if err != nil {
-					return nil, err
-				}
-			}
-
-			err = i.ObtainSecretFromToken(pin)
+			pin, err = i.obtainSecretFromToken(pin)
 			if err != nil {
 				return nil, err
 			}
@@ -577,7 +570,7 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 			}
 
 			// needs to be called for every stanza because at least the salt changed
-			err := id.ObtainSecretFromToken(pin)
+			pin, err = id.obtainSecretFromToken(pin)
 			if err != nil {
 				return nil, err
 			}
