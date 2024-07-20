@@ -355,16 +355,11 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(pin string) error {
 	}
 
 	if device == nil {
-		msg := "Please insert your token now."
-
-		if i.Plugin != nil {
-			err := i.Plugin.DisplayMessage(msg)
-			if err != nil {
-				return err
-			}
-		} else {
-			fmt.Fprintf(os.Stderr, "[*] %s\n", msg)
+		err := i.DisplayMessage("Please insert your token now.")
+		if err != nil {
+			return err
 		}
+
 		device, err = WaitForDevice(120)
 
 		if err != nil {
@@ -376,7 +371,7 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(pin string) error {
 		msg := "Please enter your PIN:"
 		if i.Plugin != nil {
 			var err error
-			pin, err = i.Plugin.RequestValue(msg, true)
+			pin, err = i.RequestSecret(msg)
 			if err != nil {
 				return err
 			}
@@ -391,14 +386,9 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(pin string) error {
 		}
 	}
 
-	msg := "Please touch your token"
-	if i.Plugin != nil {
-		err := i.Plugin.DisplayMessage(msg)
-		if err != nil {
-			return err
-		}
-	} else {
-		fmt.Fprintf(os.Stderr, "[*] %s\n", msg)
+	err = i.DisplayMessage("Please touch your token")
+	if err != nil {
+		return err
 	}
 
 	if i.RequirePin {
@@ -413,11 +403,9 @@ func (i *Fido2HmacIdentity) ObtainSecretFromToken(pin string) error {
 
 	err = mlock.Mlock(i.secretKey)
 	if err != nil {
-		msg := fmt.Sprintf("Warning: Failed to call mlock: %s", err)
-		if i.Plugin != nil {
-			i.Plugin.DisplayMessage(msg)
-		} else {
-			fmt.Fprintf(os.Stderr, "[*] %s\n", msg)
+		err = i.DisplayMessage(fmt.Sprintf("Warning: Failed to call mlock: %s", err))
+		if err != nil {
+			return err
 		}
 	}
 
@@ -522,9 +510,11 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 	}
 
 	if device == nil {
-		msg := "Please insert your token now."
+		err = i.DisplayMessage("Please insert your token now.")
+		if err != nil {
+			return nil, err
+		}
 
-		i.Plugin.DisplayMessage(msg)
 		device, err = WaitForDevice(120)
 
 		if err != nil {
@@ -545,7 +535,7 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 	if i.Version == 2 && i.CredId != nil && len(x25519Stanzas) > 0 {
 		if i.secretKey == nil {
 			if i.RequirePin {
-				pin, err = i.Plugin.RequestValue("Please enter you PIN:", true)
+				pin, err = i.RequestSecret("Please enter you PIN:")
 				if err != nil {
 					return nil, err
 				}
@@ -582,13 +572,6 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 			continue
 		}
 
-		if (i.RequirePin || fidoStanza.RequirePin) && pin == "" {
-			pin, err = i.Plugin.RequestValue("Please enter you PIN:", true)
-			if err != nil {
-				return nil, err
-			}
-		}
-
 		// some fields need to be copied over from the stanza
 		// create a temporary identity with this fields to preserve
 		// the original field values of i
@@ -601,10 +584,19 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 			id.RequirePin = fidoStanza.RequirePin
 		}
 
-		// needs to be called for every stanza because at least the salt changed
-		err := id.ObtainSecretFromToken(pin)
-		if err != nil {
-			return nil, err
+		if !(i.Version == 2 && i.secretKey != nil && slices.Equal(i.CredId, id.CredId)) {
+			if (i.RequirePin || fidoStanza.RequirePin) && pin == "" {
+				pin, err = i.RequestSecret("Please enter you PIN:")
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			// needs to be called for every stanza because at least the salt changed
+			err := id.ObtainSecretFromToken(pin)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		switch id.Version {
@@ -656,6 +648,39 @@ func (i *Fido2HmacIdentity) ClearSecret() {
 	}
 
 	i.secretKey = nil
+}
+
+func (i *Fido2HmacIdentity) DisplayMessage(msg string) error {
+	if i.Plugin != nil {
+		err := i.Plugin.DisplayMessage(msg)
+		if err != nil {
+			return err
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "[*] %s\n", msg)
+	}
+
+	return nil
+}
+
+func (i *Fido2HmacIdentity) RequestSecret(msg string) (result string, err error) {
+	if i.Plugin != nil {
+		var err error
+		result, err = i.Plugin.RequestValue(msg, true)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "[*] %s\n", msg)
+		resultBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+		if err != nil {
+			return "", err
+		}
+
+		result = string(resultBytes)
+	}
+
+	return
 }
 
 func (i *Fido2HmacIdentity) String() string {

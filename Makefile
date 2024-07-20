@@ -5,7 +5,7 @@ test: build
 	go test -v ./...
 
 test-e2e: build
-	testscript -v ./cmd/age-plugin-fido2-hmac/testdata/*.txtar
+	testscript ./cmd/age-plugin-fido2-hmac/testdata/*.txtar
 
 format:
 	go fmt ./pkg/... ./cmd/...
