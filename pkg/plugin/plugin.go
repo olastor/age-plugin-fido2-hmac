@@ -504,24 +504,6 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 		return nil, fmt.Errorf("no stanza is supported")
 	}
 
-	device, err := FindDevice()
-	if err != nil {
-		return nil, err
-	}
-
-	if device == nil {
-		err = i.DisplayMessage("Please insert your token now.")
-		if err != nil {
-			return nil, err
-		}
-
-		device, err = WaitForDevice(120)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	// this mixes up the indexes, so don't use them for errors
 	sort.SliceStable(pluginStanzas, func(k, l int) bool {
 		// make sure to first try the identities without pin
@@ -530,6 +512,8 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 
 	// only ask once for the pin if needed and store it here temporarily thereafter
 	pin := ""
+
+	var err error
 
 	// if the version is two and there is a cred id we expect to unwrap x25519 stanzas
 	if i.Version == 2 && i.CredId != nil && len(x25519Stanzas) > 0 {
@@ -541,7 +525,7 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 				}
 			}
 
-			err := i.ObtainSecretFromToken(pin)
+			err = i.ObtainSecretFromToken(pin)
 			if err != nil {
 				return nil, err
 			}
