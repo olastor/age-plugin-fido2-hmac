@@ -148,9 +148,8 @@ sudo dnf install usbip clang clang-devel
 git clone https://github.com/Nitrokey/nitrokey-3-firmware.git
 cd nitrokey-3-firmware/runners/usbip
 cargo build
-cargo run
+cargo run -- --ifs ../../../e2e/test_device.bin
 make attach # separate shell
-fido2-token -S "$(fido2-token -L | head | cut -d':' -f1)" # set to 1234
 ```
 
 Then run the tests using:
@@ -158,5 +157,3 @@ Then run the tests using:
 ```bash
 make test-e2e
 ```
-
-To make the backwards compatibility tests work, the test device must use the file system in `e2e/test_device.bin` by running `cargo run -- --ifs <path-to-fs>` instead of just `cargo run`.

@@ -4,14 +4,14 @@ go 1.22
 
 toolchain go1.22.1
 
-require filippo.io/age v1.1.2-0.20230920124100-101cc8676386
+require filippo.io/age v1.2.1-0.20240621125216-8734a853bcdf
 
 require (
 	github.com/keys-pub/go-libfido2 v1.5.4-0.20230628153049-536daffdd394
 	github.com/olastor/age-plugin-controller v0.1.0
-	golang.org/x/crypto v0.22.0
-	golang.org/x/sys v0.19.0
-	golang.org/x/term v0.19.0
+	golang.org/x/crypto v0.24.0
+	golang.org/x/sys v0.21.0
+	golang.org/x/term v0.21.0
 )
 
 require (
