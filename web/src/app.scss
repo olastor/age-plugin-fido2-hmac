@@ -1,0 +1,19 @@
+$iceberg-dark-bg: #2A3132;
+$iceberg-dark-text: #D1D7DB;
+$iceberg-dark-primary: #3E5B77;
+$iceberg-dark-secondary: #A7B2B6;
+$iceberg-dark-accent: #88B0B8;
+
+$body-bg: $iceberg-dark-bg;
+$body-color: $iceberg-dark-text;
+
+$primary: $iceberg-dark-primary;
+$secondary: $iceberg-dark-secondary;
+$success: #2ECC71;
+$info: $iceberg-dark-accent;
+$warning: #F39C12;
+$danger: #E74C3C;
+$light: #F7F7F7;
+$dark: #1B1D1F;
+
+@import "~bootstrap/scss/bootstrap";
