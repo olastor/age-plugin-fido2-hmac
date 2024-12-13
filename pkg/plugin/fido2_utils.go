@@ -2,23 +2,52 @@ package plugin
 
 import (
 	"errors"
-	"github.com/keys-pub/go-libfido2"
+	"slices"
 	"time"
+
+	"github.com/keys-pub/go-libfido2"
 )
 
 func FindDevice() (*libfido2.Device, error) {
 	locs, err := libfido2.DeviceLocations()
-
 	if err != nil {
 		return nil, err
 	}
 
-	if len(locs) > 1 {
+	devs := []*libfido2.Device{}
+	for _, loc := range locs {
+		dev, err := libfido2.NewDevice(loc.Path)
+		if err != nil {
+			return nil, err
+		}
+
+		isFido, err := dev.IsFIDO2()
+		if err != nil {
+			return nil, err
+		}
+
+		if !isFido {
+			continue
+		}
+
+		info, err := dev.Info()
+		if err != nil {
+			return nil, err
+		}
+
+		if !slices.Contains(info.Extensions, string(libfido2.HMACSecretExtension)) {
+			continue
+		}
+
+		devs = append(devs, dev)
+	}
+
+	if len(devs) > 1 {
 		return nil, errors.New("Too many devices")
 	}
 
-	if len(locs) == 1 {
-		return libfido2.NewDevice(locs[0].Path)
+	if len(devs) == 1 {
+		return devs[0], nil
 	}
 
 	return nil, nil
