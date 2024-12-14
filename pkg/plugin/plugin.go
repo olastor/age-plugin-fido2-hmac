@@ -4,17 +4,20 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
-	"filippo.io/age"
-	page "filippo.io/age/plugin"
+	"errors"
 	"fmt"
-	"github.com/olastor/age-plugin-fido2-hmac/internal/bech32"
-	"github.com/olastor/age-plugin-fido2-hmac/internal/mlock"
-	"golang.org/x/crypto/chacha20poly1305"
-	"golang.org/x/term"
 	"os"
 	"slices"
 	"sort"
 	"strings"
+
+	"filippo.io/age"
+	page "filippo.io/age/plugin"
+	"github.com/keys-pub/go-libfido2"
+	"github.com/olastor/age-plugin-fido2-hmac/internal/bech32"
+	"github.com/olastor/age-plugin-fido2-hmac/internal/mlock"
+	"golang.org/x/crypto/chacha20poly1305"
+	"golang.org/x/term"
 )
 
 var b64 = base64.RawStdEncoding.Strict()
@@ -520,6 +523,12 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 		if i.secretKey == nil {
 			pin, err = i.obtainSecretFromToken(pin)
 			if err != nil {
+				if errors.Is(err, libfido2.ErrNoCredentials) {
+					// since the cred ID is the same for all stanzas and it does not match the token,
+					// we can tell the controller to try the next identity
+					return nil, age.ErrIncorrectIdentity
+				}
+
 				return nil, err
 			}
 		}
@@ -572,6 +581,12 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 			// needs to be called for every stanza because at least the salt changed
 			pin, err = id.obtainSecretFromToken(pin)
 			if err != nil {
+				if errors.Is(err, libfido2.ErrNoCredentials) {
+					// just because this one stanza didn't match the token doesn't mean
+					// any of the other stanzas left don't match. do not error here early!
+					continue
+				}
+
 				return nil, err
 			}
 		}
