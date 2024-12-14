@@ -38,13 +38,13 @@ type Fido2HmacRecipient struct {
 }
 
 type Fido2HmacIdentity struct {
-	Version     uint16
-	secretKey   []byte
-	RequirePin  bool
-	Salt        []byte
-	CredId      []byte
-	Plugin      *page.Plugin
-	legacyNonce []byte
+	Version    uint16
+	secretKey  []byte
+	RequirePin bool
+	Salt       []byte
+	CredId     []byte
+	Plugin     *page.Plugin
+	Nonce      []byte
 }
 
 // data structure for stanza with parsed args
@@ -54,7 +54,7 @@ type Fido2HmacStanza struct {
 	Salt        []byte
 	CredId      []byte
 	X25519Share string
-	legacyNonce []byte
+	Nonce       []byte
 	Body        []byte
 }
 
@@ -158,7 +158,7 @@ func ParseFido2HmacStanza(stanza *age.Stanza) (*Fido2HmacStanza, error) {
 			return nil, fmt.Errorf("salt in stanza is malformed")
 		}
 
-		stanzaData.legacyNonce, err = b64.DecodeString(stanza.Args[1])
+		stanzaData.Nonce, err = b64.DecodeString(stanza.Args[1])
 		if err != nil {
 			return nil, fmt.Errorf("nonce in stanza is malformed")
 		}
@@ -415,12 +415,12 @@ func (i *Fido2HmacIdentity) obtainSecretFromToken(pin string) (string, error) {
 func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 	switch i.Version {
 	case 1:
-		i.legacyNonce = make([]byte, 12)
-		if _, err := rand.Read(i.legacyNonce); err != nil {
+		i.Nonce = make([]byte, 12)
+		if _, err := rand.Read(i.Nonce); err != nil {
 			return nil, err
 		}
 
-		if i.legacyNonce == nil || len(i.legacyNonce) != 12 {
+		if i.Nonce == nil || len(i.Nonce) != 12 {
 			return nil, fmt.Errorf("incomplete identity, missing or invalid nonce for encryption")
 		}
 
@@ -443,11 +443,11 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 			return nil, err
 		}
 
-		ciphertext := aead.Seal(nil, i.legacyNonce, fileKey, nil)
+		ciphertext := aead.Seal(nil, i.Nonce, fileKey, nil)
 
 		stanzaArgs := make([]string, 2)
 		stanzaArgs[0] = b64.EncodeToString(i.Salt)
-		stanzaArgs[1] = b64.EncodeToString(i.legacyNonce)
+		stanzaArgs[1] = b64.EncodeToString(i.Nonce)
 
 		stanza := &age.Stanza{
 			Type: PLUGIN_NAME,
@@ -554,7 +554,7 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 		// the original field values of i
 		id := *i
 		id.Salt = fidoStanza.Salt
-		id.legacyNonce = fidoStanza.legacyNonce
+		id.Nonce = fidoStanza.Nonce
 		if i.CredId == nil {
 			id.Version = fidoStanza.Version
 			id.CredId = fidoStanza.CredId
@@ -583,7 +583,7 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 				return nil, err
 			}
 
-			plaintext, err := aead.Open(nil, id.legacyNonce, fidoStanza.Body, nil)
+			plaintext, err := aead.Open(nil, id.Nonce, fidoStanza.Body, nil)
 			mlock.Mlock(plaintext)
 
 			if err != nil {
