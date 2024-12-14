@@ -8,10 +8,9 @@ require filippo.io/age v1.2.1-0.20240621125216-8734a853bcdf
 
 require (
 	github.com/keys-pub/go-libfido2 v1.5.4-0.20230628153049-536daffdd394
-	github.com/olastor/age-plugin-controller v0.1.0
-	golang.org/x/crypto v0.24.0
-	golang.org/x/sys v0.21.0
-	golang.org/x/term v0.21.0
+	golang.org/x/crypto v0.31.0
+	golang.org/x/sys v0.28.0
+	golang.org/x/term v0.27.0
 )
 
 require (
