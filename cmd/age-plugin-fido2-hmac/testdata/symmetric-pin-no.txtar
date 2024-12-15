@@ -8,7 +8,6 @@ exec age-plugin-fido2-hmac --symmetric -g
 cp stdout out2
 
 grep -count=1 'age1fido2-hmac' out1
-grep -count=1 'AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76' out1
 
 grep 'age1fido2-hmac' out2
 grep -count=1 'AGE-PLUGIN-FIDO2-HMAC-' out2
@@ -18,8 +17,6 @@ exec bash -c 'cat out1 | grep -oP "age1.*" > recipient1.txt'
 exec bash -c 'cat out2 | grep -oP "age1.*" > recipient2.txt'
 ! stderr .
 
-exec bash -c 'cat out1 | tail -n1 > identity1.txt'
-! stderr .
 exec bash -c 'cat out2 | tail -n1 > identity2.txt'
 ! stderr .
 
@@ -29,14 +26,14 @@ stderr 'touch your token'
 exec age -R recipient2.txt -o ciphertext2 plaintext
 stderr 'touch your token'
 
-exec age -d -o plaintext1 -i identity1.txt ciphertext1
+exec age -d -o plaintext1 -j fido2-hmac ciphertext1
 cmp plaintext plaintext1
 
 exec age -d -o plaintext2 -i identity2.txt ciphertext2
 cmp plaintext plaintext2
 
 exec age -e -i identity2.txt -o ciphertext3 plaintext
-! exec age -d -o plaintext3 -i magic.txt ciphertext3
+! exec age -d -o plaintext3 -j fido2-hmac ciphertext3
 exec age -d -o plaintext3 -i identity2.txt ciphertext3
 cmp plaintext plaintext3
 
@@ -50,7 +47,5 @@ n
 n
 y
 
--- magic.txt --
-AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76
 -- plaintext --
 this is the plaintext

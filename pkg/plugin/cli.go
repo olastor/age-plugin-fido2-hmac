@@ -141,7 +141,6 @@ func GenerateNewCli(algorithm libfido2.CredentialType, symmetric bool) {
 		}
 	} else {
 		fmt.Fprintf(os.Stdout, "# public key: %s\n", recipient)
-		fmt.Fprint(os.Stdout, "# for decryption, use `age-plugin-fido2-hmac -m` to get the following static \"magic\" identity.\n")
-		fmt.Fprintf(os.Stdout, "%s\n", MAGIC_IDENTITY)
+		fmt.Fprint(os.Stdout, "# for decryption, use `age -d -j fido2-hmac` without any identity file.\n")
 	}
 }
