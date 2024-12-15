@@ -8,7 +8,6 @@ exec age-plugin-fido2-hmac --symmetric --generate
 cp stdout out2
 
 grep -count=1 'age1fido2-hmac' out1
-grep -count=1 'AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76' out1
 
 grep 'age1fido2-hmac' out2
 grep -count=1 'AGE-PLUGIN-FIDO2-HMAC-' out2
@@ -18,8 +17,6 @@ exec bash -c 'cat out1 | grep -oP "age1fido2-hmac.*" > recipient1.txt'
 exec bash -c 'cat out2 | grep -oP "age1fido2-hmac.*" > recipient2.txt'
 ! stderr .
 
-exec bash -c 'cat out1 | tail -n1 > identity1.txt'
-! stderr .
 exec bash -c 'cat out2 | tail -n1 > identity2.txt'
 ! stderr .
 
@@ -32,7 +29,7 @@ exec age -R recipient2.txt -o ciphertext2 plaintext
 stderr 'touch your token'
 
 ttyin -stdin pin-wrong
-! exec age -d -o plaintext1 -i identity1.txt ciphertext1
+! exec age -d -o plaintext1 -j fido2-hmac ciphertext1
 stderr 'pin invalid'
 
 ttyin -stdin pin-wrong
@@ -40,7 +37,7 @@ ttyin -stdin pin-wrong
 stderr 'pin invalid'
 
 ttyin -stdin pin
-exec age -d -o plaintext1 -i identity1.txt ciphertext1
+exec age -d -o plaintext1 -j fido2-hmac ciphertext1
 stderr 'touch your token'
 cmp plaintext plaintext1
 
@@ -52,7 +49,7 @@ ttyin -stdin pin
 exec age -e -i identity2.txt -o ciphertext3 plaintext
 
 ttyin -stdin pin
-! exec age -d -o plaintext3 -i magic.txt ciphertext3
+! exec age -d -o plaintext3 -j fido2-hmac ciphertext3
 
 ttyin -stdin pin
 exec age -d -o plaintext3 -i identity2.txt ciphertext3
@@ -72,7 +69,5 @@ n
 y
 y
 
--- magic.txt --
-AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76
 -- plaintext --
 this is the plaintext

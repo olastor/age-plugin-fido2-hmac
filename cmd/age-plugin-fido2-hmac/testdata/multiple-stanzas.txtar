@@ -16,7 +16,7 @@ exec bash -c 'cat identity0.txt identity1.txt identity2.txt | grep -oP "age1.*" 
 exec age -R recipients.txt -o ciphertext plaintext
 
 ttyin -stdin pin
-exec age -d -o plaintext1 -i identity1.txt ciphertext
+exec age -d -o plaintext1 -j fido2-hmac ciphertext
 cmp plaintext plaintext1
 
 exec age -d -o plaintext2 -i identity2.txt ciphertext
@@ -34,7 +34,5 @@ n
 n
 y
 
--- magic.txt --
-AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76
 -- plaintext --
 this is the plaintext
