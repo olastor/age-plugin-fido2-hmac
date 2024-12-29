@@ -8,7 +8,6 @@ exec age-plugin-fido2-hmac -g
 cp stdout out2
 
 grep -count=1 'age1fido2-hmac' out1
-grep -count=1 'AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76' out1
 
 ! grep 'age1fido2-hmac' out2
 ! grep 'AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76' out2
@@ -20,8 +19,6 @@ exec bash -c 'cat out1 | grep -oP "age1.*" > recipient1.txt'
 exec bash -c 'cat out2 | grep -oP "age1.*" > recipient2.txt'
 ! stderr .
 
-exec bash -c 'cat out1 | tail -n1 > identity1.txt'
-! stderr .
 exec bash -c 'cat out2 | tail -n1 > identity2.txt'
 ! stderr .
 
@@ -32,7 +29,7 @@ exec age -R recipient2.txt -o ciphertext2 plaintext
 ! stderr .
 
 ttyin -stdin pin-wrong
-! exec age -d -o plaintext1 -i identity1.txt ciphertext1
+! exec age -d -o plaintext1 -j fido2-hmac ciphertext1
 stderr 'pin invalid'
 
 ttyin -stdin pin-wrong
@@ -40,7 +37,7 @@ ttyin -stdin pin-wrong
 stderr 'pin invalid'
 
 ttyin -stdin pin
-exec age -d -o plaintext1 -i identity1.txt ciphertext1
+exec age -d -o plaintext1 -j fido2-hmac ciphertext1
 cmp plaintext plaintext1
 
 ttyin -stdin pin

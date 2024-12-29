@@ -28,7 +28,6 @@ const (
 	IDENTITY_HRP                 = "age-plugin-" + PLUGIN_NAME + "-"
 	RELYING_PARTY                = "age-encryption.org"
 	STANZA_FORMAT_VERSION uint16 = 2
-	MAGIC_IDENTITY               = "AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76"
 )
 
 type Fido2HmacRecipient struct {
@@ -59,6 +58,13 @@ type Fido2HmacStanza struct {
 	X25519Share string
 	Nonce       []byte
 	Body        []byte
+}
+
+// Checks if an identity is a "data-less" identity. This method is backwards-compatible with older plugin versions that used a custom "magic" identity.
+func IsDatalessIdentity(identity string) bool {
+	// the first one is the legacy special identity of this plugin
+	// the second one is the identity passed from age when using -j
+	return identity == "AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76" || identity == "AGE-PLUGIN-FIDO2-HMAC-188VDVA"
 }
 
 func ParseFido2HmacRecipient(recipient string) (*Fido2HmacRecipient, error) {
@@ -96,7 +102,7 @@ func ParseFido2HmacRecipient(recipient string) (*Fido2HmacRecipient, error) {
 }
 
 func ParseFido2HmacIdentity(identity string) (*Fido2HmacIdentity, error) {
-	if identity == MAGIC_IDENTITY {
+	if IsDatalessIdentity(identity) {
 		return &Fido2HmacIdentity{
 			Version: 2,
 		}, nil

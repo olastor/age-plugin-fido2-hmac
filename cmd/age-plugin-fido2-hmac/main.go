@@ -24,25 +24,25 @@ Options:
                           The token must be present for every operation.
     -a, --algorithm       Choose a specific algorithm when creating the fido2 credential.
                           Can be one of 'es256', 'eddsa', or 'rs256'. Default: es256
-    -m, --magic-identity  Print the magic identity to use when no identity is required.
     -v, --version         Show the version.
     -h, --help            Show this help message.
 
 Examples:
-  $ age-plugin-fido2-hmac -g > identity.txt
+  $ age-plugin-fido2-hmac -g > identity.txt # only contains an identity if chosen by user
   $ cat identity.txt | grep 'public key' | grep -oP 'age1.*' > recipient.txt
   $ echo 'secret' | age -R recipient.txt -o secret.enc
-  $ age -d -i identity.txt secret.enc`
+  $ age -d -i identity.txt secret.enc # when you created an identity
+  $ age -d -j fido2-hmac secret.enc # when there is no identity`
 
 func main() {
 	var (
-		pluginFlag    string
-		algorithmFlag string
-		generateFlag  bool
-		magicFlag     bool
-		helpFlag      bool
-		versionFlag   bool
-		symmetricFlag bool
+		pluginFlag          string
+		algorithmFlag       string
+		generateFlag        bool
+		helpFlag            bool
+		versionFlag         bool
+		symmetricFlag       bool
+		deprecatedMagicFlag bool
 	)
 
 	flag.Usage = func() { fmt.Fprintf(os.Stderr, "%s\n", USAGE) }
@@ -56,8 +56,8 @@ func main() {
 	flag.BoolVar(&generateFlag, "generate", false, "")
 	flag.BoolVar(&generateFlag, "n", false, "")
 
-	flag.BoolVar(&magicFlag, "m", false, "")
-	flag.BoolVar(&magicFlag, "magic-identity", false, "")
+	flag.BoolVar(&deprecatedMagicFlag, "m", false, "")
+	flag.BoolVar(&deprecatedMagicFlag, "magic-identity", false, "")
 
 	flag.BoolVar(&symmetricFlag, "s", false, "")
 	flag.BoolVar(&symmetricFlag, "symmetric", false, "")
@@ -75,8 +75,9 @@ func main() {
 		os.Exit(0)
 	}
 
-	if magicFlag {
-		fmt.Printf("%s", plugin.MAGIC_IDENTITY)
+	if deprecatedMagicFlag {
+		fmt.Fprintln(os.Stderr, "# Warning: the -m option is deprecated, use `age -j fido2-hmac` instead")
+		fmt.Print("AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76")
 		os.Exit(0)
 	}
 
