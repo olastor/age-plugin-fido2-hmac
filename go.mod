@@ -4,7 +4,7 @@ go 1.22
 
 toolchain go1.22.1
 
-require filippo.io/age v1.2.1-0.20240621125216-8734a853bcdf
+require filippo.io/age v1.2.1
 
 require (
 	github.com/keys-pub/go-libfido2 v1.5.4-0.20230628153049-536daffdd394
