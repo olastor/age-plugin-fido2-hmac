@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"filippo.io/age"
 	page "filippo.io/age/plugin"
-	"github.com/keys-pub/go-libfido2"
 	"github.com/olastor/age-plugin-fido2-hmac/pkg/plugin"
+	"github.com/olastor/go-libfido2"
 )
 
 var Version string
@@ -98,7 +99,19 @@ func main() {
 			}
 		}
 
-		plugin.GenerateNewCli(algorithm, symmetricFlag)
+		recipientStr, identityStr, err := plugin.NewCredentialsCli(algorithm, symmetricFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed: %s", err)
+			os.Exit(1)
+		}
+
+		if identityStr != "" {
+			fmt.Fprintf(os.Stdout, "# public key: %s\n%s\n", recipientStr, identityStr)
+		} else {
+			fmt.Fprint(os.Stdout, "# for decryption, use `age -d -j fido2-hmac` without any identity file.\n")
+			fmt.Fprintf(os.Stdout, "# public key: %s\n%s\n", recipientStr, identityStr)
+		}
+
 		os.Exit(0)
 	}
 
@@ -109,14 +122,27 @@ func main() {
 		}
 		p.HandleRecipient(func(data []byte) (age.Recipient, error) {
 			r, err := plugin.ParseFido2HmacRecipient(page.EncodeRecipient("fido2-hmac", data))
-			r.Plugin = p
 			if err != nil {
 				return nil, err
 			}
+
+			if r.Version == 1 {
+				r.Device, err = plugin.FindDevice(50*time.Second, p.DisplayMessage)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			r.Plugin = p
 			return r, nil
 		})
 		p.HandleIdentityAsRecipient(func(data []byte) (age.Recipient, error) {
 			i, err := plugin.ParseFido2HmacIdentity(page.EncodeIdentity("fido2-hmac", data))
+			if err != nil {
+				return nil, err
+			}
+
+			i.Device, err = plugin.FindDevice(50*time.Second, p.DisplayMessage)
 			if err != nil {
 				return nil, err
 			}
@@ -141,6 +167,12 @@ func main() {
 			if err != nil {
 				return nil, err
 			}
+
+			i.Device, err = plugin.FindDevice(50*time.Second, p.DisplayMessage)
+			if err != nil {
+				return nil, err
+			}
+
 			i.Plugin = p
 			return i, nil
 		})
