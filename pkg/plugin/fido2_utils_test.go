@@ -2,7 +2,7 @@ package plugin
 
 import (
 	"fmt"
-	"github.com/keys-pub/go-libfido2"
+	"github.com/olastor/go-libfido2"
 	"reflect"
 	"testing"
 )

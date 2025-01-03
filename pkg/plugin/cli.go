@@ -5,7 +5,7 @@ import (
 	"crypto/rand"
 	"filippo.io/age"
 	"fmt"
-	"github.com/keys-pub/go-libfido2"
+	"github.com/olastor/go-libfido2"
 	"golang.org/x/term"
 	"os"
 	"strings"
@@ -25,60 +25,56 @@ func promptYesNo(s string) (bool, error) {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(response)), "y"), nil
 }
 
-func GenerateNewCli(algorithm libfido2.CredentialType, symmetric bool) {
-	device, err := FindDevice()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-		os.Exit(1)
+func NewCredentials(
+	algorithm libfido2.CredentialType,
+	symmetric bool,
+	displayMessage func(message string) error,
+	requestValue func(prompt string, secret bool) (string, error),
+	confirm func(prompt, yes, no string) (choseYes bool, err error),
+) (string, string, error) {
+	var device *libfido2.Device
+	devicePathFromEnv := os.Getenv("FIDO2_TOKEN")
+	if devicePathFromEnv != "" {
+		displayMessage("Using device path from env")
+		device, _ = libfido2.NewDevice(devicePathFromEnv)
 	}
 
-	fmt.Fprintf(os.Stderr, "[*] Please insert your token now...\n")
+	displayMessage("Please insert your token now...")
 
-	if device == nil {
-		device, err = WaitForDevice(120)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-			os.Exit(1)
-		}
+	device, err := FindDevice(50*time.Second, displayMessage)
+	if err != nil {
+		return "", "", err
 	}
 
 	hasPinSet, err := HasPinSet(device)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-		os.Exit(1)
+		return "", "", err
 	}
 
 	pin := ""
 	if hasPinSet {
-		fmt.Fprintf(os.Stderr, "Please enter your PIN: ")
-		pinBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
-		pin = string(pinBytes)
+		pin, err = requestValue("Please enter your PIN: ", true)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-			os.Exit(1)
+			return "", "", err
 		}
-		fmt.Fprintf(os.Stderr, "\n")
 	}
 
-	fmt.Fprintf(os.Stderr, "[*] Please touch your token...\n")
-	credId, err := GenerateNewCredential(device, pin, algorithm)
+	displayMessage("Please touch your token...")
+	credId, err := generateNewCredential(device, pin, algorithm)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-		os.Exit(1)
+		return "", "", err
 	}
 
 	salt := make([]byte, 32)
 	if _, err := rand.Read(salt); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-		os.Exit(1)
+		return "", "", err
 	}
 
 	requirePin := false
 	if hasPinSet {
-		requirePin, err = promptYesNo("[*] Do you want to require a PIN for decryption?")
+		requirePin, err = confirm("Do you want to require a PIN for decryption?", "yes", "no")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-			os.Exit(1)
+			return "", "", err
 		}
 	}
 
@@ -96,11 +92,11 @@ func GenerateNewCli(algorithm libfido2.CredentialType, symmetric bool) {
 			RequirePin: requirePin,
 			Salt:       nil,
 			CredId:     credId,
+			Device:     device,
 		}
 		recipient, err = identity.Recipient()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-			os.Exit(1)
+			return "", "", err
 		}
 	} else {
 		identity = &Fido2HmacIdentity{
@@ -108,39 +104,74 @@ func GenerateNewCli(algorithm libfido2.CredentialType, symmetric bool) {
 			RequirePin: requirePin,
 			Salt:       salt,
 			CredId:     credId,
+			Device:     device,
 		}
 
 		_, err = identity.obtainSecretFromToken(pin)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-			os.Exit(1)
+			return "", "", err
 		}
 
 		recipient, err = identity.Recipient()
 		identity.ClearSecret()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-			os.Exit(1)
+			return "", "", err
 		}
 
 		x25519Recipient, err = recipient.X25519Recipient()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-			os.Exit(1)
+			return "", "", err
 		}
 	}
 
-	wantsSeparateIdentity, err := promptYesNo("[*] Are you fine with having a separate identity (better privacy)?")
+	wantsSeparateIdentity, err := confirm(
+		"Are you fine with having a separate identity (better privacy)?",
+		"yes",
+		"no",
+	)
 
-	fmt.Fprintf(os.Stdout, "# created: %s\n", time.Now().Format(time.RFC3339))
 	if wantsSeparateIdentity {
 		if recipient.Version == 1 {
-			fmt.Fprintf(os.Stdout, "# public key: %s\n%s\n", recipient, identity)
+			return recipient.String(), identity.String(), nil
 		} else {
-			fmt.Fprintf(os.Stdout, "# public key: %s\n%s\n", x25519Recipient, identity)
+			return x25519Recipient.String(), identity.String(), nil
 		}
 	} else {
-		fmt.Fprintf(os.Stdout, "# public key: %s\n", recipient)
-		fmt.Fprint(os.Stdout, "# for decryption, use `age -d -j fido2-hmac` without any identity file.\n")
+		return recipient.String(), "", nil
 	}
+}
+
+func NewCredentialsCli(
+	algorithm libfido2.CredentialType,
+	symmetric bool,
+) (string, string, error) {
+	displayMessage := func(message string) error {
+		fmt.Fprintf(os.Stderr, "[*] %s\n", message)
+		return nil
+	}
+	requestValue := func(message string, _ bool) (s string, err error) {
+		fmt.Fprintf(os.Stderr, message)
+		secretBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+		if err != nil {
+			return "", err
+		}
+
+		return string(secretBytes), nil
+	}
+	confirm := func(message, yes, no string) (choseYes bool, err error) {
+		answerYes, err := promptYesNo(fmt.Sprintf("[*] %s", message))
+		if err != nil {
+			return false, err
+		}
+
+		return answerYes, nil
+	}
+
+	return NewCredentials(
+		algorithm,
+		symmetric,
+		displayMessage,
+		requestValue,
+		confirm,
+	)
 }

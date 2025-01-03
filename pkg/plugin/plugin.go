@@ -13,9 +13,9 @@ import (
 
 	"filippo.io/age"
 	page "filippo.io/age/plugin"
-	"github.com/keys-pub/go-libfido2"
 	"github.com/olastor/age-plugin-fido2-hmac/internal/bech32"
 	"github.com/olastor/age-plugin-fido2-hmac/internal/mlock"
+	"github.com/olastor/go-libfido2"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/term"
 )
@@ -37,6 +37,9 @@ type Fido2HmacRecipient struct {
 	Salt           []byte
 	CredId         []byte
 	Plugin         *page.Plugin
+
+	// only when the version is 1, the device must be set
+	Device *libfido2.Device
 }
 
 type Fido2HmacIdentity struct {
@@ -47,6 +50,7 @@ type Fido2HmacIdentity struct {
 	CredId     []byte
 	Plugin     *page.Plugin
 	Nonce      []byte
+	Device     *libfido2.Device
 }
 
 // data structure for stanza with parsed args
@@ -205,16 +209,6 @@ func ParseFido2HmacStanza(stanza *age.Stanza) (*Fido2HmacStanza, error) {
 	return stanzaData, nil
 }
 
-func StanzaArgsLine(stanza *age.Stanza) string {
-	line := fmt.Sprintf("recipient-stanza 0 %s", stanza.Type)
-
-	for _, arg := range stanza.Args {
-		line = fmt.Sprintf("%s %s", line, arg)
-	}
-
-	return line
-}
-
 func (r *Fido2HmacRecipient) X25519Recipient() (*age.X25519Recipient, error) {
 	recipientStr, _ := bech32.Encode("age", r.TheirPublicKey)
 	return age.ParseX25519Recipient(recipientStr)
@@ -263,6 +257,7 @@ func (r *Fido2HmacRecipient) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 			RequirePin: r.RequirePin,
 			CredId:     r.CredId,
 			Plugin:     r.Plugin,
+			Device:     r.Device,
 		}
 
 		stanzas, err := identity.Wrap(fileKey)
@@ -358,22 +353,8 @@ func (i *Fido2HmacIdentity) Recipient() (*Fido2HmacRecipient, error) {
 
 // the pin can be passed if it's known already to avoid re-asking, but it's optional
 func (i *Fido2HmacIdentity) obtainSecretFromToken(pin string) (string, error) {
-	device, err := FindDevice()
-	if err != nil {
-		return pin, err
-	}
-
-	if device == nil {
-		err := i.DisplayMessage("Please insert your token now.")
-		if err != nil {
-			return pin, err
-		}
-
-		device, err = WaitForDevice(120)
-
-		if err != nil {
-			return pin, err
-		}
+	if i.Device == nil {
+		return pin, fmt.Errorf("device not specified, cannot obtain secret.")
 	}
 
 	if i.RequirePin && pin == "" {
@@ -395,15 +376,15 @@ func (i *Fido2HmacIdentity) obtainSecretFromToken(pin string) (string, error) {
 		}
 	}
 
-	err = i.DisplayMessage("Please touch your token")
+	err := i.DisplayMessage("Please touch your token")
 	if err != nil {
 		return pin, err
 	}
 
 	if i.RequirePin {
-		i.secretKey, err = GetHmacSecret(device, i.CredId, i.Salt, pin)
+		i.secretKey, err = getHmacSecret(i.Device, i.CredId, i.Salt, pin)
 	} else {
-		i.secretKey, err = GetHmacSecret(device, i.CredId, i.Salt, "")
+		i.secretKey, err = getHmacSecret(i.Device, i.CredId, i.Salt, "")
 	}
 
 	if err != nil {

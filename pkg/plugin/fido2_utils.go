@@ -2,13 +2,14 @@ package plugin
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
-	"github.com/keys-pub/go-libfido2"
+	"github.com/olastor/go-libfido2"
 )
 
-func FindDevice() (*libfido2.Device, error) {
+func listEligibleDevices() ([]*libfido2.Device, error) {
 	locs, err := libfido2.DeviceLocations()
 	if err != nil {
 		return nil, err
@@ -16,23 +17,16 @@ func FindDevice() (*libfido2.Device, error) {
 
 	devs := []*libfido2.Device{}
 	for _, loc := range locs {
-		dev, err := libfido2.NewDevice(loc.Path)
-		if err != nil {
-			return nil, err
-		}
+		dev, _ := libfido2.NewDevice(loc.Path)
 
 		isFido, err := dev.IsFIDO2()
-		if err != nil {
-			return nil, err
-		}
-
-		if !isFido {
+		if err != nil || !isFido {
 			continue
 		}
 
 		info, err := dev.Info()
 		if err != nil {
-			return nil, err
+			continue
 		}
 
 		if !slices.Contains(info.Extensions, string(libfido2.HMACSecretExtension)) {
@@ -42,30 +36,34 @@ func FindDevice() (*libfido2.Device, error) {
 		devs = append(devs, dev)
 	}
 
-	if len(devs) > 1 {
-		return nil, errors.New("Too many devices")
-	}
-
-	if len(devs) == 1 {
-		return devs[0], nil
-	}
-
-	return nil, nil
+	return devs, nil
 }
 
-func WaitForDevice(maxWaitTimeSeconds int) (*libfido2.Device, error) {
-	for i := 0; i <= maxWaitTimeSeconds; i++ {
-		device, err := FindDevice()
+func FindDevice(
+	timeout time.Duration,
+	displayMessage func(message string) error,
+) (*libfido2.Device, error) {
+	start := time.Now()
 
+	for {
+		if time.Since(start) >= timeout {
+			break
+		}
+
+		devs, err := listEligibleDevices()
 		if err != nil {
 			return nil, err
 		}
 
-		if device != nil {
-			return device, nil
+		if len(devs) == 1 {
+			return devs[0], nil
+		} else if len(devs) > 1 {
+			msg := fmt.Sprintf("Found %d devices. Please touch the one you want to use.", len(devs))
+			displayMessage(msg)
+			return libfido2.SelectDevice(devs, 10*time.Second)
 		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(200 * time.Millisecond)
 	}
 
 	return nil, errors.New("Timed out waiting for device.")
@@ -88,7 +86,11 @@ func HasPinSet(device *libfido2.Device) (bool, error) {
 	return false, nil
 }
 
-func GenerateNewCredential(device *libfido2.Device, pin string, algorithm libfido2.CredentialType) (credId []byte, error error) {
+func generateNewCredential(
+	device *libfido2.Device,
+	pin string,
+	algorithm libfido2.CredentialType,
+) (credId []byte, error error) {
 	cdh := libfido2.RandBytes(32)
 	userId := libfido2.RandBytes(32)
 	userName := b64.EncodeToString(libfido2.RandBytes(6))
@@ -117,7 +119,7 @@ func GenerateNewCredential(device *libfido2.Device, pin string, algorithm libfid
 	return attest.CredentialID, nil
 }
 
-func GetHmacSecret(device *libfido2.Device, credId []byte, salt []byte, pin string) ([]byte, error) {
+func getHmacSecret(device *libfido2.Device, credId []byte, salt []byte, pin string) ([]byte, error) {
 	if len(salt) != 32 {
 		return nil, errors.New("Salt must be 32 bytes!")
 	}
