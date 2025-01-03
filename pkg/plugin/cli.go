@@ -33,11 +33,6 @@ func NewCredentials(
 	confirm func(prompt, yes, no string) (choseYes bool, err error),
 ) (string, string, error) {
 	var device *libfido2.Device
-	devicePathFromEnv := os.Getenv("FIDO2_TOKEN")
-	if devicePathFromEnv != "" {
-		displayMessage("Using device path from env")
-		device, _ = libfido2.NewDevice(devicePathFromEnv)
-	}
 
 	displayMessage("Please insert your token now...")
 

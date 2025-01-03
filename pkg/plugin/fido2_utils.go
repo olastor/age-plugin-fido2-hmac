@@ -3,6 +3,7 @@ package plugin
 import (
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"time"
 
@@ -43,6 +44,12 @@ func FindDevice(
 	timeout time.Duration,
 	displayMessage func(message string) error,
 ) (*libfido2.Device, error) {
+	devicePathFromEnv := os.Getenv("FIDO2_TOKEN")
+	if devicePathFromEnv != "" {
+		displayMessage(fmt.Sprintf("Using device path from env: %s", devicePathFromEnv))
+		return libfido2.NewDevice(devicePathFromEnv)
+	}
+
 	start := time.Now()
 
 	for {
