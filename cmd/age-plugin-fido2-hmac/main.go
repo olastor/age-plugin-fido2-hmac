@@ -33,7 +33,13 @@ Examples:
   $ cat identity.txt | grep 'public key' | grep -oP 'age1.*' > recipient.txt
   $ echo 'secret' | age -R recipient.txt -o secret.enc
   $ age -d -i identity.txt secret.enc # when you created an identity
-  $ age -d -j fido2-hmac secret.enc # when there is no identity`
+  $ age -d -j fido2-hmac secret.enc # when there is no identity
+
+Environment Variables:
+
+  FIDO2_TOKEN     This variable can be used to force a specific device path. Please note that
+                  /dev/hid* paths are ephemeral and fido2 tokens (mostly) have no identifier.
+                  Therefore, it's in general not recommended to use this environment variable.`
 
 func main() {
 	var (
