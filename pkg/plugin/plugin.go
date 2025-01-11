@@ -474,6 +474,10 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 }
 
 func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
+	if len(stanzas) == 0 {
+		return nil, fmt.Errorf("list of stanzas is empty")
+	}
+
 	var pluginStanzas []*Fido2HmacStanza
 	var x25519Stanzas []*age.Stanza
 
@@ -491,7 +495,9 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 	}
 
 	if len(pluginStanzas)+len(x25519Stanzas) == 0 {
-		return nil, fmt.Errorf("no stanza is supported")
+		// there were stanzas provided, but non of them are compatible
+		// with the plugin or the identity version
+		return nil, age.ErrIncorrectIdentity
 	}
 
 	// this mixes up the indexes, so don't use them for errors
