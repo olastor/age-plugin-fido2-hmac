@@ -60,11 +60,6 @@ func NewCredentials(
 		return "", "", err
 	}
 
-	salt := make([]byte, 32)
-	if _, err := rand.Read(salt); err != nil {
-		return "", "", err
-	}
-
 	requirePin := false
 	if hasPinSet {
 		requirePin, err = confirm("Do you want to require a PIN for decryption?", "yes", "no")
@@ -94,6 +89,11 @@ func NewCredentials(
 			return "", "", err
 		}
 	} else {
+		salt := make([]byte, 32)
+		if _, err := rand.Read(salt); err != nil {
+			return "", "", err
+		}
+
 		identity = &Fido2HmacIdentity{
 			Version:    2,
 			RequirePin: requirePin,
