@@ -83,7 +83,6 @@ func main() {
 	}
 
 	if deprecatedMagicFlag {
-		fmt.Fprintln(os.Stderr, "# Warning: the -m option is deprecated, use `age -j fido2-hmac` instead")
 		fmt.Print("AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76")
 		os.Exit(0)
 	}
