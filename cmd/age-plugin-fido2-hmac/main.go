@@ -23,6 +23,7 @@ Options:
     -g, --generate        Generate new credentials interactively.
     -s, --symmetric       Use symmetric encryption and use a new salt for every encryption.
                           The token must be present for every operation.
+    -m, --magic-identity  Print the magic identity to use when no identity is required.
     -a, --algorithm       Choose a specific algorithm when creating the fido2 credential.
                           Can be one of 'es256', 'eddsa', or 'rs256'. Default: es256
     -v, --version         Show the version.
