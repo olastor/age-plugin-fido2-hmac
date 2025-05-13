@@ -84,7 +84,7 @@ Please enter your PIN:
 AGE-PLUGIN-FIDO2-HMAC-1QQPQZRFR7ZZ2WCV...
 ```
 
-You can decide between storing your fido2 credential / salt inside the encrypted file header (benefit: no separate identity / downside: ciphertexts can be linked) or in a separate identity (benefit: native age recipient, unlinkabilty / downside: keep identity stored securely somewhere). To decrypt files without an identity, use the magic identity (`age-plugin-fido2-hmac -m`).
+You can decide between storing your fido2 credential / salt inside the encrypted file header (benefit: no separate identity / downside: ciphertexts can be linked) or in a separate identity (benefit: native age recipient, unlinkabilty / downside: keep identity stored securely somewhere). To decrypt files without an identity, add `-j fido2-hmac` instead of `-i identity.txt` to your age command (e.g. `age -d -j fido2-hmac -o test.txt test.txt.enc`) or use the output of `age-plugin-fido2-hmac -m` as the identity alternatively.
 
 You are responsible for knowing which token matches your recipient / identity. There is no token identifier stored. If you have multiple tokens and forgot which one you used, there's no other way than trial/error to find out which one it was.
 
@@ -101,8 +101,7 @@ age -r age1... -o test.txt.enc test.txt
 **Decryption:**
 
 ```bash
-age-plugin-fido2-hmac -m > magic.txt
-age -d -i magic.txt -o test-decrypted.txt test.txt.enc
+age -d -j fido2-hmac -o test-decrypted.txt test.txt.enc
 ```
 
 or
