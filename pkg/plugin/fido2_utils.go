@@ -1,53 +1,26 @@
 package plugin
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"os"
-	"slices"
 	"time"
 
-	"github.com/keys-pub/go-libfido2"
+	"github.com/ldclabs/cose/key"
+	"github.com/savely-krasovsky/go-ctaphid/pkg/ctaptypes"
+	"github.com/savely-krasovsky/go-ctaphid/pkg/device"
+	"github.com/savely-krasovsky/go-ctaphid/pkg/sugar"
 )
-
-func listEligibleDevices() ([]*libfido2.Device, error) {
-	locs, err := libfido2.DeviceLocations()
-	if err != nil {
-		return nil, err
-	}
-
-	devs := []*libfido2.Device{}
-	for _, loc := range locs {
-		dev, _ := libfido2.NewDevice(loc.Path)
-
-		isFido, err := dev.IsFIDO2()
-		if err != nil || !isFido {
-			continue
-		}
-
-		info, err := dev.Info()
-		if err != nil {
-			continue
-		}
-
-		if !slices.Contains(info.Extensions, string(libfido2.HMACSecretExtension)) {
-			continue
-		}
-
-		devs = append(devs, dev)
-	}
-
-	return devs, nil
-}
 
 func FindDevice(
 	timeout time.Duration,
 	displayMessage func(message string) error,
-) (*libfido2.Device, error) {
+) (*device.Device, error) {
 	devicePathFromEnv := os.Getenv("FIDO2_TOKEN")
 	if devicePathFromEnv != "" {
 		displayMessage(fmt.Sprintf("Using device path from env: %s", devicePathFromEnv))
-		return libfido2.NewDevice(devicePathFromEnv)
+		return device.New(devicePathFromEnv)
 	}
 
 	start := time.Now()
@@ -57,17 +30,17 @@ func FindDevice(
 			break
 		}
 
-		devs, err := listEligibleDevices()
+		devs, err := sugar.EnumerateFIDODevices()
 		if err != nil {
 			return nil, err
 		}
 
 		if len(devs) == 1 {
-			return devs[0], nil
+			return sugar.SelectDevice(sugar.WithDeviceInfos(devs))
 		} else if len(devs) > 1 {
 			msg := fmt.Sprintf("Found %d devices. Please touch the one you want to use.", len(devs))
 			displayMessage(msg)
-			return libfido2.SelectDevice(devs, 10*time.Second)
+			return sugar.SelectDevice(sugar.WithDeviceInfos(devs))
 		}
 
 		time.Sleep(200 * time.Millisecond)
@@ -76,81 +49,127 @@ func FindDevice(
 	return nil, errors.New("Timed out waiting for device.")
 }
 
-func HasPinSet(device *libfido2.Device) (bool, error) {
-	info, err := device.Info()
-	if err != nil {
-		return false, err
-	}
-
-	for _, option := range info.Options {
-		if option.Name != "clientPin" {
+func HasPinSet(device *device.Device) (bool, error) {
+	info := device.GetInfo()
+	for k, v := range info.Options {
+		if k != ctaptypes.OptionClientPIN {
 			continue
 		}
 
-		return option.Value == "true", nil
+		return v == true, nil
 	}
 
 	return false, nil
 }
 
+func randBytes(length int) []byte {
+	buf := make([]byte, length)
+	if _, err := rand.Read(buf); err != nil {
+		panic(err)
+	}
+	return buf
+}
+
 func generateNewCredential(
-	device *libfido2.Device,
+	device *device.Device,
 	pin string,
-	algorithm libfido2.CredentialType,
+	algorithm key.Alg,
 ) (credId []byte, error error) {
-	cdh := libfido2.RandBytes(32)
-	userId := libfido2.RandBytes(32)
-	userName := b64.EncodeToString(libfido2.RandBytes(6))
+	cdh := randBytes(32)
+	userId := randBytes(32)
+	userName := b64.EncodeToString(randBytes(6))
 
-	attest, err := device.MakeCredential(
-		cdh,
-		libfido2.RelyingParty{
-			ID: RELYING_PARTY,
-		},
-		libfido2.User{
-			ID:   userId,
-			Name: userName,
-		},
-		algorithm,
+	token, err := device.GetPinUvAuthTokenUsingPIN(
 		pin,
-		&libfido2.MakeCredentialOpts{
-			Extensions: []libfido2.Extension{libfido2.HMACSecretExtension},
-			RK:         "false",
-		},
+		ctaptypes.PermissionMakeCredential,
+		RELYING_PARTY,
 	)
-
 	if err != nil {
 		return nil, err
 	}
 
-	return attest.CredentialID, nil
+	attest, err := device.MakeCredential(
+		token,
+		cdh,
+		ctaptypes.PublicKeyCredentialRpEntity{
+			ID: RELYING_PARTY,
+		},
+		ctaptypes.PublicKeyCredentialUserEntity{
+			ID:   userId,
+			Name: userName,
+		},
+		[]ctaptypes.PublicKeyCredentialParameters{{
+			Type:      ctaptypes.PublicKeyCredentialTypePublicKey,
+			Algorithm: algorithm,
+		}},
+		nil,
+		map[ctaptypes.ExtensionIdentifier]any{
+			ctaptypes.ExtensionIdentifierHMACSecret: true,
+		},
+		map[ctaptypes.Option]bool{
+			ctaptypes.OptionResidentKeys: false,
+		},
+		0,
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return attest.AuthData.AttestedCredentialData.CredentialID, nil
 }
 
-func getHmacSecret(device *libfido2.Device, credId []byte, salt []byte, pin string) ([]byte, error) {
+var ErrNoCredentials = errors.New("no credentials found")
+
+func getHmacSecret(dev *device.Device, credId []byte, salt []byte, pin string) ([]byte, error) {
 	if len(salt) != 32 {
 		return nil, errors.New("Salt must be 32 bytes!")
 	}
 
-	cdh := libfido2.RandBytes(32)
+	cdh := randBytes(32)
 
-	assertion, err := device.Assertion(
-		RELYING_PARTY,
-		cdh,
-		[][]byte{credId},
+	token, err := dev.GetPinUvAuthTokenUsingPIN(
 		pin,
-		&libfido2.AssertionOpts{
-			Extensions: []libfido2.Extension{libfido2.HMACSecretExtension},
-			HMACSalt:   salt,
-		},
+		ctaptypes.PermissionGetAssertion,
+		RELYING_PARTY,
 	)
-
 	if err != nil {
 		return nil, err
 	}
 
-	if assertion.HMACSecret == nil || len(assertion.HMACSecret) != 32 {
-		return nil, errors.New("invalid hmac secret")
+	for assertion, err := range dev.GetAssertion(
+		token,
+		RELYING_PARTY,
+		cdh,
+		[]ctaptypes.PublicKeyCredentialDescriptor{
+			{
+				Type: ctaptypes.PublicKeyCredentialTypePublicKey,
+				ID:   credId,
+			},
+		},
+		map[ctaptypes.ExtensionIdentifier]any{
+			ctaptypes.ExtensionIdentifierHMACSecret: &device.HMACSecretInput{
+				Salt1: salt,
+			},
+		},
+		nil,
+	) {
+		if err != nil {
+			return nil, err
+		}
+
+		secret, ok := assertion.AuthData.Extensions[ctaptypes.ExtensionIdentifierHMACSecret]
+		if !ok {
+			return nil, errors.New("invalid hmac secret")
+		}
+
+		secretBytes, ok := secret.(*device.HMACSecretOutput)
+		if !ok {
+			return nil, errors.New("invalid hmac secret")
+		}
+
+		return secretBytes.Output1, nil
 	}
 
-	return assertion.HMACSecret, nil
+	return nil, ErrNoCredentials
 }

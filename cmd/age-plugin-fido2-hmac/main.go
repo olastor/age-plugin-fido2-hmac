@@ -9,7 +9,8 @@ import (
 
 	"filippo.io/age"
 	page "filippo.io/age/plugin"
-	"github.com/keys-pub/go-libfido2"
+	"github.com/ldclabs/cose/iana"
+	"github.com/ldclabs/cose/key"
 	"github.com/olastor/age-plugin-fido2-hmac/pkg/plugin"
 )
 
@@ -89,16 +90,16 @@ func main() {
 	}
 
 	if generateFlag {
-		algorithm := libfido2.ES256
+		algorithm := key.Alg(iana.AlgorithmES256)
 
 		if algorithmFlag != "" {
 			switch strings.TrimSpace(strings.ToLower(algorithmFlag)) {
 			case "es256":
-				algorithm = libfido2.ES256
+				algorithm = key.Alg(iana.AlgorithmES256)
 			case "rs256":
-				algorithm = libfido2.RS256
+				algorithm = key.Alg(iana.AlgorithmRS256)
 			case "eddsa":
-				algorithm = libfido2.EDDSA
+				algorithm = key.Alg(iana.AlgorithmEdDSA)
 			default:
 				fmt.Fprintf(os.Stderr, "Unknown algorithm: \"%s\"", algorithmFlag)
 				os.Exit(1)

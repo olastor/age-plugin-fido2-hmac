@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"filippo.io/age"
-	"github.com/keys-pub/go-libfido2"
 	"github.com/olastor/age-plugin-fido2-hmac/internal/bech32"
 	"github.com/olastor/age-plugin-fido2-hmac/internal/mlock"
 	"golang.org/x/crypto/chacha20poly1305"
@@ -219,7 +218,7 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 		if i.secretKey == nil {
 			pin, err = i.obtainSecretFromToken(pin)
 			if err != nil {
-				if errors.Is(err, libfido2.ErrNoCredentials) {
+				if errors.Is(err, ErrNoCredentials) {
 					// since the cred ID is the same for all stanzas and it does not match the token,
 					// we can tell the controller to try the next identity
 					return nil, age.ErrIncorrectIdentity
@@ -277,7 +276,7 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 			// needs to be called for every stanza because at least the salt changed
 			pin, err = id.obtainSecretFromToken(pin)
 			if err != nil {
-				if errors.Is(err, libfido2.ErrNoCredentials) {
+				if errors.Is(err, ErrNoCredentials) {
 					// just because this one stanza didn't match the token doesn't mean
 					// any of the other stanzas left don't match. do not error here early!
 					continue
