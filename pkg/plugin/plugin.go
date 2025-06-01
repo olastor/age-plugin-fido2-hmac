@@ -8,8 +8,8 @@ import (
 
 	"filippo.io/age"
 	page "filippo.io/age/plugin"
-	"github.com/keys-pub/go-libfido2"
 	"github.com/olastor/age-plugin-fido2-hmac/internal/bech32"
+	"github.com/savely-krasovsky/go-ctaphid/pkg/device"
 )
 
 var b64 = base64.RawStdEncoding.Strict()
@@ -31,7 +31,7 @@ type Fido2HmacRecipient struct {
 	Plugin         *page.Plugin
 
 	// only when the version is 1, the device must be set
-	Device *libfido2.Device
+	Device *device.Device
 }
 
 type Fido2HmacIdentity struct {
@@ -42,7 +42,7 @@ type Fido2HmacIdentity struct {
 	CredId     []byte
 	Plugin     *page.Plugin
 	Nonce      []byte
-	Device     *libfido2.Device
+	Device     *device.Device
 }
 
 // data structure for stanza with parsed args

@@ -2,27 +2,30 @@ package plugin
 
 import (
 	"fmt"
-	"github.com/keys-pub/go-libfido2"
+
+	"github.com/savely-krasovsky/go-ctaphid/pkg/device"
+	"github.com/savely-krasovsky/go-ctaphid/pkg/sugar"
+
 	"reflect"
 	"testing"
 )
 
 func TestEnforcePin(t *testing.T) {
-	locs, err := libfido2.DeviceLocations()
+	locs, err := sugar.EnumerateFIDODevices()
 	if err != nil {
 		t.Error(err)
 	}
 
-	var dev *libfido2.Device
-	if len(locs) != 1 || locs[0].Product != "Nitrokey 3" {
+	var dev *device.Device
+	if len(locs) != 1 {
 		fmt.Printf("Testing with virtual test device not possible\n")
 		return
 	}
 
-	dev, _ = libfido2.NewDevice(locs[0].Path)
-	info, _ := dev.Info()
+	dev, _ = device.New(locs[0].Path)
+	info := dev.GetInfo()
 	aaguid := fmt.Sprintf("%s", info.AAGUID)
-	if info == nil || aaguid != "AAGUID0123456789" {
+	if aaguid != "AAGUID0123456789" {
 		fmt.Printf("Testing with virtual test device not possible.\n")
 		return
 	}

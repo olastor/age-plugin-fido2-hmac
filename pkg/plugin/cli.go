@@ -3,13 +3,15 @@ package plugin
 import (
 	"bufio"
 	"crypto/rand"
-	"filippo.io/age"
 	"fmt"
-	"github.com/keys-pub/go-libfido2"
-	"golang.org/x/term"
 	"os"
 	"strings"
 	"time"
+
+	"filippo.io/age"
+	"github.com/ldclabs/cose/key"
+	"github.com/savely-krasovsky/go-ctaphid/pkg/device"
+	"golang.org/x/term"
 )
 
 func promptYesNo(s string) (bool, error) {
@@ -26,22 +28,22 @@ func promptYesNo(s string) (bool, error) {
 }
 
 func NewCredentials(
-	algorithm libfido2.CredentialType,
+	algorithm key.Alg,
 	symmetric bool,
 	displayMessage func(message string) error,
 	requestValue func(prompt string, secret bool) (string, error),
 	confirm func(prompt, yes, no string) (choseYes bool, err error),
 ) (string, string, error) {
-	var device *libfido2.Device
+	var dev *device.Device
 
 	displayMessage("Please insert your token now...")
 
-	device, err := FindDevice(50*time.Second, displayMessage)
+	dev, err := FindDevice(50*time.Second, displayMessage)
 	if err != nil {
 		return "", "", err
 	}
 
-	hasPinSet, err := HasPinSet(device)
+	hasPinSet, err := HasPinSet(dev)
 	if err != nil {
 		return "", "", err
 	}
@@ -55,7 +57,7 @@ func NewCredentials(
 	}
 
 	displayMessage("Please touch your token...")
-	credId, err := generateNewCredential(device, pin, algorithm)
+	credId, err := generateNewCredential(dev, pin, algorithm)
 	if err != nil {
 		return "", "", err
 	}
@@ -82,7 +84,7 @@ func NewCredentials(
 			RequirePin: requirePin,
 			Salt:       nil,
 			CredId:     credId,
-			Device:     device,
+			Device:     dev,
 		}
 		recipient, err = identity.Recipient()
 		if err != nil {
@@ -99,7 +101,7 @@ func NewCredentials(
 			RequirePin: requirePin,
 			Salt:       salt,
 			CredId:     credId,
-			Device:     device,
+			Device:     dev,
 		}
 
 		_, err = identity.obtainSecretFromToken(pin)
@@ -137,7 +139,7 @@ func NewCredentials(
 }
 
 func NewCredentialsCli(
-	algorithm libfido2.CredentialType,
+	algorithm key.Alg,
 	symmetric bool,
 ) (string, string, error) {
 	displayMessage := func(message string) error {
@@ -146,9 +148,22 @@ func NewCredentialsCli(
 	}
 	requestValue := func(message string, _ bool) (s string, err error) {
 		fmt.Fprintf(os.Stderr, message)
-		secretBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
-		if err != nil {
-			return "", err
+
+		var secretBytes []byte
+
+		fd := int(os.Stdin.Fd())
+		if term.IsTerminal(fd) {
+			secretBytes, err = term.ReadPassword(fd)
+			if err != nil {
+				return "", err
+			}
+		} else {
+			reader := bufio.NewReader(os.Stdin)
+			pin, err := reader.ReadString('\n')
+			if err != nil {
+				return "", err
+			}
+			secretBytes = []byte(strings.TrimSpace(pin))
 		}
 
 		return string(secretBytes), nil
