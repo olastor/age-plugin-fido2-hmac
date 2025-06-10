@@ -112,6 +112,8 @@ or
 age -d -i identity.txt -o test-decrypted.txt test.txt.enc
 ```
 
+Where `identity.txt` is a file you created putting the `AGE-PLUGIN-FIDO2-HMAC-1QQP...` separated identity you created before.
+
 ### Choosing a different algorithm
 
 By default, one of the following algorithms is picked (in that order): ES256, EdDSA, RS256. If you want the credential to use a specific algorithm, use the `-a` parameter:
