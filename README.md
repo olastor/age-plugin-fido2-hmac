@@ -98,6 +98,8 @@ If you require a PIN for decryption, you (obviously) must not forget it. The PIN
 age -r age1... -o test.txt.enc test.txt
 ```
 
+Where `age1...` is the public key you created with the previous step.
+
 **Decryption:**
 
 ```bash
@@ -124,6 +126,14 @@ Note that
 - the length of recipient/identity strings **can increase dramatically** by using a different algorithm.
 
 The default (in most cases) is "es256", which should provide the smallest recipient/identity strings.
+
+### Multiple keys
+
+If you have multiple keys (if you are running under Windows 11 you have at least a default `windows://hello` key), you can specify the one you prefer setting the `FIDO2_TOKEN` environment variable with the value ypu get from `fido2-token -L`.
+
+### Notes for runnng under Windows
+
+Under Windows you have to run the commands as an administrator.
 
 ## Testing
 
