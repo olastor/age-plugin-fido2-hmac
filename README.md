@@ -98,6 +98,8 @@ If you require a PIN for decryption, you (obviously) must not forget it. The PIN
 age -r age1... -o test.txt.enc test.txt
 ```
 
+(where `age1...` is the public key you created with the previous step.)
+
 **Decryption:**
 
 ```bash
@@ -109,6 +111,8 @@ or
 ```bash
 age -d -i identity.txt -o test-decrypted.txt test.txt.enc
 ```
+
+(where `identity.txt` is a file you created putting the `AGE-PLUGIN-FIDO2-HMAC-1QQP...` separated identity you created before.)
 
 ### Choosing a different algorithm
 
@@ -124,6 +128,15 @@ Note that
 - the length of recipient/identity strings **can increase dramatically** by using a different algorithm.
 
 The default (in most cases) is "es256", which should provide the smallest recipient/identity strings.
+
+### Multiple keys
+
+If multiple keys are present, the plugin will start a selection process by making all keys blink until one of them is tapped. Alternatively, you can specify the device you prefer by setting the `FIDO2_TOKEN` environment variable to the device path you get from `fido2-token -L` (for example `/dev/hidraw7`). Please note that this path is ephemeral and not a persistent identifier.
+
+### Notes for runnng under Windows
+
+- the command must be run as an administrator
+- in Windows 11 you have at least one default `windows://hello` device available
 
 ## Testing
 
