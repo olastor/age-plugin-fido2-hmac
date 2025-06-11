@@ -11,9 +11,9 @@ import (
 	"strings"
 
 	"filippo.io/age"
-	"github.com/keys-pub/go-libfido2"
 	"github.com/olastor/age-plugin-fido2-hmac/internal/bech32"
 	"github.com/olastor/age-plugin-fido2-hmac/internal/mlock"
+	"github.com/olastor/go-libfido2"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/term"
 )

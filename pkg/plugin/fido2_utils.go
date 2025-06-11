@@ -7,7 +7,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/keys-pub/go-libfido2"
+	"github.com/olastor/go-libfido2"
 )
 
 func listEligibleDevices() ([]*libfido2.Device, error) {

@@ -7,7 +7,7 @@ toolchain go1.22.1
 require filippo.io/age v1.2.1-0.20240621125216-8734a853bcdf
 
 require (
-	github.com/keys-pub/go-libfido2 v1.5.4-0.20250104233141-2534349bd685
+	github.com/olastor/go-libfido2 v0.0.0-20250611191617-da5602ad9fbe
 	golang.org/x/crypto v0.31.0
 	golang.org/x/sys v0.28.0
 	golang.org/x/term v0.27.0

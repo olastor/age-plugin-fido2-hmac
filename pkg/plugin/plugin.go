@@ -8,8 +8,8 @@ import (
 
 	"filippo.io/age"
 	page "filippo.io/age/plugin"
-	"github.com/keys-pub/go-libfido2"
 	"github.com/olastor/age-plugin-fido2-hmac/internal/bech32"
+	"github.com/olastor/go-libfido2"
 )
 
 var b64 = base64.RawStdEncoding.Strict()

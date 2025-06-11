@@ -5,7 +5,7 @@ import (
 	"crypto/rand"
 	"filippo.io/age"
 	"fmt"
-	"github.com/keys-pub/go-libfido2"
+	"github.com/olastor/go-libfido2"
 	"golang.org/x/term"
 	"os"
 	"strings"
