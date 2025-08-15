@@ -1,6 +1,13 @@
 # age-plugin-fido2-hmac
 
-⚠️ Consider this plugin to be experimental until the version v1.0.0 is published! ⚠️
+> [!WARNING]
+> Please consider this plugin to be experimental until the version v1.0.0 is published!
+
+> [!NOTE]
+> This plugin by default uses FIDO2's hmac-secret extension for generating an X2559 age identity, which allows for encryption without the token, but also means a compromise of the identity would affect _all_ files encrypted to the same recipient (as with a normal age identity).
+>
+> If you are looking for symmetrically encrypting each file with a separate key, consider using the official [age-plugin-fido2prf](https://github.com/FiloSottile/typage?tab=readme-ov-file#age-plugin-fido2prf) plugin instead.
+
 
 ---
 
