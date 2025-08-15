@@ -148,17 +148,17 @@ jobs:
 
     - name: Package
       run: |
-        VERSION="$(git describe --tags --always)"
+        $VERSION = git describe --tags --always
         go build -ldflags "-X main.Version=$VERSION" -v ./cmd/...
-        DIR="$(mktemp -d)"
-        mkdir "$DIR/age-plugin-fido2-hmac"
-        cp LICENSE "$DIR/age-plugin-fido2-hmac"
-        mv age-plugin-fido2-hmac "$DIR/age-plugin-fido2-hmac"
-        OLDDIR="$(pwd)"
-        cd "$DIR"
-        zip age-plugin-fido2-hmac.zip -r age-plugin-fido2-hmac
-        cd "$OLDDIR"
-        mv "$DIR/age-plugin-fido2-hmac.zip" "age-plugin-fido2-hmac-$VERSION-windows-amd64.zip"
+        $DIR = New-TemporaryFile | ForEach-Object { Remove-Item $_; New-Item -ItemType Directory -Path $_ }
+        New-Item -ItemType Directory -Path "$DIR/age-plugin-fido2-hmac"
+        Copy-Item LICENSE "$DIR/age-plugin-fido2-hmac/"
+        Move-Item age-plugin-fido2-hmac.exe "$DIR/age-plugin-fido2-hmac/"
+        $OLDDIR = Get-Location
+        Set-Location "$DIR"
+        Compress-Archive -Path age-plugin-fido2-hmac -DestinationPath age-plugin-fido2-hmac.zip
+        Set-Location "$OLDDIR"
+        Move-Item "$DIR/age-plugin-fido2-hmac.zip" "age-plugin-fido2-hmac-$VERSION-windows-amd64.zip"
       env:
         CGO_ENABLED: ${{ env.CGO_ENABLED }}
         GOARCH: amd64
@@ -172,7 +172,7 @@ jobs:
   release:
     name: Upload release binaries
     if: github.event_name == 'release'
-    needs: ["build-linux-amd64", "build-darwin-amd64", "build-darwin-arm64"]
+    needs: ["build-linux-amd64", "build-darwin-amd64", "build-darwin-arm64", "build-windows-amd64"]
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -185,6 +185,7 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" plugin-binaries-darwin-amd64/age-plugin-fido2-hmac*
           gh release upload "$GITHUB_REF_NAME" plugin-binaries-darwin-arm64/age-plugin-fido2-hmac*
           gh release upload "$GITHUB_REF_NAME" plugin-binaries-linux/age-plugin-fido2-hmac*
+          gh release upload "$GITHUB_REF_NAME" plugin-binaries-windows-amd64/age-plugin-fido2-hmac*
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
