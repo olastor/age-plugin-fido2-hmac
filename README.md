@@ -74,7 +74,7 @@ mv ./age-plugin-fido2-hmac ~/.local/bin/age-plugin-fido2-hmac
 
 ## Usage
 
-### Generate a new recpient/identity
+### Generate a new recipient/identity
 
 Generate new credentials with the following command:
 
