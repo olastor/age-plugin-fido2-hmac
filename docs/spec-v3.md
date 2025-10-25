@@ -15,15 +15,16 @@
 +--------------+---------------------+----------------+------------------------------------+
 ```
 
-The recipient consists of three parts:
+The recipient consists of four parts:
 
 - The fixed version identifier "3" (big-endian unsigned short)
 - The X25519 public key
+- The user ID that also is used as salt
 - The relying party ID (RP_ID) of the discoverable credential 
 
 TODO: keep pin flag?
 
-**Stanza Format (linkable):**
+**Stanza Format:**
 
 ```
 -> fido2-hmac <stanza version (2B)> <x25519 ephemeral share (32B)> <user id (32B)> <relying party ID>
