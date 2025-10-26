@@ -277,8 +277,9 @@ func ListCredentialsCli(rpId string) error {
 		fmt.Fprintf(os.Stdout, "  Name:    %s\n", cred.User.Name)
 
 		identity := &Fido2HmacIdentity{
-			Version:    3,
-			RequirePin: false,
+			Version: 3,
+			// TODO: fix for credentials without pin set
+			RequirePin: true,
 			UserId:     cred.User.ID,
 			RpId:       rpId,
 			CredId:     cred.ID,
