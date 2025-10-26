@@ -15,11 +15,10 @@ import (
 var b64 = base64.RawStdEncoding.Strict()
 
 const (
-	PLUGIN_NAME                  = "fido2-hmac"
-	RECIPIENT_HRP                = "age1" + PLUGIN_NAME
-	IDENTITY_HRP                 = "age-plugin-" + PLUGIN_NAME + "-"
-	RELYING_PARTY                = "age-encryption.org"
-	STANZA_FORMAT_VERSION uint16 = 2
+	PLUGIN_NAME           = "fido2-hmac"
+	RECIPIENT_HRP         = "age1" + PLUGIN_NAME
+	IDENTITY_HRP          = "age-plugin-" + PLUGIN_NAME + "-"
+	DEFAULT_RELYING_PARTY = "age-encryption.org"
 )
 
 type Fido2HmacRecipient struct {
@@ -40,6 +39,8 @@ type Fido2HmacIdentity struct {
 	RequirePin bool
 	Salt       []byte
 	CredId     []byte
+	UserId     []byte
+	RpId       string
 	Plugin     *page.Plugin
 	Nonce      []byte
 	Device     *libfido2.Device
@@ -51,6 +52,8 @@ type Fido2HmacStanza struct {
 	RequirePin  bool
 	Salt        []byte
 	CredId      []byte
+	UserId      []byte
+	RpId        string
 	X25519Share string
 	Nonce       []byte
 	Body        []byte
@@ -123,6 +126,7 @@ func ParseFido2HmacIdentity(identity string) (*Fido2HmacIdentity, error) {
 			RequirePin: data[2] == byte(1),
 			Salt:       nil,
 			CredId:     data[3:],
+			RpId:       DEFAULT_RELYING_PARTY,
 		}, nil
 	case 2:
 		return &Fido2HmacIdentity{
@@ -131,6 +135,15 @@ func ParseFido2HmacIdentity(identity string) (*Fido2HmacIdentity, error) {
 			RequirePin: data[2] == byte(1),
 			Salt:       data[3:35],
 			CredId:     data[35:],
+			RpId:       DEFAULT_RELYING_PARTY,
+		}, nil
+	case 3:
+		return &Fido2HmacIdentity{
+			Version:    3,
+			secretKey:  nil,
+			RequirePin: data[2] == byte(1),
+			UserId:     data[3:35],
+			RpId:       string(data[35:]),
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported identity version %x", format_version)
@@ -194,6 +207,7 @@ func ParseFido2HmacStanza(stanza *age.Stanza) (*Fido2HmacStanza, error) {
 			return nil, fmt.Errorf("cred id in stanza is malformed")
 		}
 
+	// there is no stanza for version 3 because the x25519 stanza is used instead
 	default:
 		return nil, fmt.Errorf("unsupported stanza version %d", stanzaData.Version)
 	}
