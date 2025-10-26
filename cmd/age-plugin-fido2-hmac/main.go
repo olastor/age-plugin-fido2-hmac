@@ -16,25 +16,30 @@ import (
 var Version string
 
 const USAGE = `Usage:
-  age-plugin-fido2-hmac [-s] [-a ALG] -g
+  age-plugin-fido2-hmac [-a ALG] [-r RP_ID] [-s] -g
+  age-plugin-fido2-hmac [-r RP_ID] -l
   age-plugin-fido2-hmac -m
 
 Options:
     -g, --generate        Generate new credentials interactively.
-    -s, --symmetric       Use symmetric encryption and use a new salt for every encryption.
-                          The token must be present for every operation.
+    -l, --list            List all discoverable credentials on the token.
     -m, --magic-identity  Print the magic identity to use when no identity is required.
     -a, --algorithm       Choose a specific algorithm when creating the fido2 credential.
                           Can be one of 'es256', 'eddsa', or 'rs256'. Default: es256
+    -r, --rp-id           Relying party ID for discoverable credentials.
+                          Default: age-encryption.org
+    -s, --symmetric       Use symmetric encryption.
     -v, --version         Show the version.
     -h, --help            Show this help message.
 
 Examples:
-  $ age-plugin-fido2-hmac -g > identity.txt # only contains an identity if chosen by user
+  $ age-plugin-fido2-hmac -g > identity.txt
   $ cat identity.txt | grep 'public key' | grep -oP 'age1.*' > recipient.txt
   $ echo 'secret' | age -R recipient.txt -o secret.enc
   $ age -d -i identity.txt secret.enc # when you created an identity
   $ age -d -j fido2-hmac secret.enc # when there is no identity
+  $ age-plugin-fido2-hmac -l # list credentials on token for default RP
+  $ age-plugin-fido2-hmac -r myapp.com -l # list credentials for specific RP
 
 Environment Variables:
 
@@ -47,10 +52,12 @@ func main() {
 		pluginFlag          string
 		algorithmFlag       string
 		generateFlag        bool
+		listFlag            bool
 		helpFlag            bool
 		versionFlag         bool
 		symmetricFlag       bool
 		deprecatedMagicFlag bool
+		rpIdFlag            string
 	)
 
 	flag.Usage = func() { fmt.Fprintf(os.Stderr, "%s\n", USAGE) }
@@ -60,9 +67,15 @@ func main() {
 	flag.StringVar(&algorithmFlag, "a", "es256", "")
 	flag.StringVar(&algorithmFlag, "algorithm", "es256", "")
 
+	flag.StringVar(&rpIdFlag, "r", plugin.DEFAULT_RELYING_PARTY, "")
+	flag.StringVar(&rpIdFlag, "rp-id", plugin.DEFAULT_RELYING_PARTY, "")
+
 	flag.BoolVar(&generateFlag, "g", false, "")
 	flag.BoolVar(&generateFlag, "generate", false, "")
 	flag.BoolVar(&generateFlag, "n", false, "")
+
+	flag.BoolVar(&listFlag, "l", false, "")
+	flag.BoolVar(&listFlag, "list", false, "")
 
 	flag.BoolVar(&deprecatedMagicFlag, "m", false, "")
 	flag.BoolVar(&deprecatedMagicFlag, "magic-identity", false, "")
@@ -88,6 +101,17 @@ func main() {
 		os.Exit(0)
 	}
 
+	if listFlag {
+		err := plugin.ListCredentialsCli(rpIdFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed: %s\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	// TODO: validate RP ID
+
 	if generateFlag {
 		algorithm := libfido2.ES256
 
@@ -105,7 +129,7 @@ func main() {
 			}
 		}
 
-		recipientStr, identityStr, err := plugin.NewCredentialsCli(algorithm, symmetricFlag)
+		recipientStr, identityStr, err := plugin.NewCredentialsCli(algorithm, symmetricFlag, rpIdFlag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed: %s", err)
 			os.Exit(1)
