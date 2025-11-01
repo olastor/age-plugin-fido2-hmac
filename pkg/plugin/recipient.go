@@ -58,6 +58,7 @@ func (r *Fido2HmacRecipient) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 			CredId:     r.CredId,
 			Plugin:     r.Plugin,
 			Device:     r.Device,
+			RpId:       DEFAULT_RELYING_PARTY,
 		}
 
 		stanzas, err := identity.Wrap(fileKey)

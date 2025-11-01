@@ -150,6 +150,7 @@ func NewCredentials(
 			Salt:       nil,
 			CredId:     credId,
 			Device:     device,
+			RpId:       DEFAULT_RELYING_PARTY,
 		}
 		recipient, err = identity.Recipient()
 		if err != nil {

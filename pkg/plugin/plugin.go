@@ -104,6 +104,7 @@ func ParseFido2HmacIdentity(identity string) (*Fido2HmacIdentity, error) {
 	if IsDatalessIdentity(identity) {
 		return &Fido2HmacIdentity{
 			Version: 2,
+			RpId:    DEFAULT_RELYING_PARTY,
 		}, nil
 	}
 
