@@ -13,10 +13,33 @@ import (
 	"golang.org/x/term"
 )
 
-func promptYesNo(s string) (bool, error) {
+type UserInterface interface {
+	DisplayMessage(message string) error
+	RequestValue(message string, _ bool) (s string, err error)
+	Confirm(message, yes, no string) (choseYes bool, err error)
+}
+
+type TerminalUserInterface struct{}
+
+func (u *TerminalUserInterface) DisplayMessage(message string) error {
+	fmt.Fprintf(os.Stderr, "[*] %s\n", message)
+	return nil
+}
+
+func (u *TerminalUserInterface) RequestValue(message string, _ bool) (s string, err error) {
+	fmt.Fprintf(os.Stderr, message)
+	secretBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+	if err != nil {
+		return "", err
+	}
+
+	return string(secretBytes), nil
+}
+
+func (u *TerminalUserInterface) Confirm(message, yes, no string) (choseYes bool, err error) {
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Fprintf(os.Stderr, "%s [y/n]: ", s)
+	fmt.Fprintf(os.Stderr, "%s [y/n]: ", message)
 
 	response, err := reader.ReadString('\n')
 	if err != nil {
@@ -26,57 +49,50 @@ func promptYesNo(s string) (bool, error) {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(response)), "y"), nil
 }
 
+// generate new credentials interactively and return the recipient and identity strings
 func NewCredentials(
 	algorithm libfido2.CredentialType,
 	symmetric bool,
 	rpId string,
-	displayMessage func(message string) error,
-	requestValue func(prompt string, secret bool) (string, error),
-	confirm func(prompt, yes, no string) (choseYes bool, err error),
-) (string, string, error) {
+	ui UserInterface,
+) (recipientString, identityString string, err error) {
 	var device *libfido2.Device
 
-	displayMessage("Please insert your token now...")
+	ui.DisplayMessage("Please insert your token now...")
 
-	device, err := FindDevice(50*time.Second, displayMessage)
+	device, err = FindDevice(50*time.Second, ui.DisplayMessage)
 	if err != nil {
 		return "", "", err
 	}
 
-	hasPinSet, err := HasPinSet(device)
+	deviceInfo, err := device.Info()
 	if err != nil {
 		return "", "", err
 	}
 
-	pin := ""
-	if hasPinSet {
-		pin, err = requestValue("Please enter your PIN: ", true)
-		if err != nil {
-			return "", "", err
-		}
-	}
+	isPinSet := isDeviceOptionTrue(deviceInfo, fido2OptionClientPin)
+	isRkSupported := isDeviceOptionTrue(deviceInfo, fido2OptionRk)
 
 	requirePin := false
-	if hasPinSet {
-		requirePin, err = confirm("Do you want to require a PIN for decryption?", "yes", "no")
+	if isPinSet {
+		requirePin, err = ui.Confirm("Do you want to require a PIN for decryption?", "yes", "no")
 		if err != nil {
 			return "", "", err
 		}
-	}
-
-	if !requirePin {
-		pin = ""
 	}
 
 	version := 1
 	if !symmetric {
 		version = 2
-		discoverable, err := confirm("Do you want to use discoverable credentials (stored on the token)?", "yes", "no")
-		if err != nil {
-			return "", "", err
-		}
-		if discoverable {
-			version = 3
+
+		if isRkSupported {
+			discoverable, err := ui.Confirm("Do you want to use discoverable credentials (stored on the token)?", "yes", "no")
+			if err != nil {
+				return "", "", err
+			}
+			if discoverable {
+				version = 3
+			}
 		}
 	}
 
@@ -84,9 +100,27 @@ func NewCredentials(
 	var recipient *Fido2HmacRecipient
 	var x25519Recipient *age.X25519Recipient
 
+	pin := ""
+	isMakeCredUvNotRqdTrue := isDeviceOptionTrue(deviceInfo, fido2OptionMakeCredUvNotRqd)
+	isPinNeededForMakeCred := !(!isPinSet || (version < 3 && isMakeCredUvNotRqdTrue))
+	if requirePin || isPinNeededForMakeCred {
+		pin, err = ui.RequestValue("Please enter your PIN: ", true)
+		if err != nil {
+			return "", "", err
+		}
+	}
+
+	askSeparateIdentity := func() (bool, error) {
+		return ui.Confirm(
+			"Are you fine with having a separate identity (better privacy)?",
+			"yes",
+			"no",
+		)
+	}
+
 	switch version {
 	case 1:
-		displayMessage("Please touch your token...")
+		ui.DisplayMessage("Please touch your token...")
 		credId, err := generateNewCredential(device, pin, algorithm)
 		if err != nil {
 			return "", "", err
@@ -103,8 +137,19 @@ func NewCredentials(
 		if err != nil {
 			return "", "", err
 		}
+
+		wantsSeparateIdentity, err := askSeparateIdentity()
+		if err != nil {
+			return "", "", err
+		}
+
+		if wantsSeparateIdentity {
+			return recipient.String(), identity.String(), nil
+		}
+
+		return recipient.String(), "", nil
 	case 2:
-		displayMessage("Please touch your token...")
+		ui.DisplayMessage("Please touch your token...")
 		credId, err := generateNewCredential(device, pin, algorithm)
 		if err != nil {
 			return "", "", err
@@ -121,6 +166,7 @@ func NewCredentials(
 			Salt:       salt,
 			CredId:     credId,
 			Device:     device,
+			RpId:       DEFAULT_RELYING_PARTY,
 		}
 
 		_, err = identity.obtainSecretFromToken(pin)
@@ -138,8 +184,19 @@ func NewCredentials(
 		if err != nil {
 			return "", "", err
 		}
+
+		wantsSeparateIdentity, err := askSeparateIdentity()
+		if err != nil {
+			return "", "", err
+		}
+
+		if wantsSeparateIdentity {
+			return x25519Recipient.String(), identity.String(), nil
+		}
+
+		return recipient.String(), "", nil
 	case 3:
-		displayMessage("Please touch your token...")
+		ui.DisplayMessage("Please touch your token...")
 		credId, userId, err := generateNewCredentialV3(device, pin, algorithm, rpId)
 		if err != nil {
 			return "", "", err
@@ -170,73 +227,15 @@ func NewCredentials(
 	default:
 		return "", "", fmt.Errorf("unsupported version: %d", version)
 	}
-
-	wantsSeparateIdentity, err := confirm(
-		"Are you fine with having a separate identity (better privacy)?",
-		"yes",
-		"no",
-	)
-	if err != nil {
-		return "", "", err
-	}
-
-	if wantsSeparateIdentity {
-		if recipient.Version == 1 {
-			return recipient.String(), identity.String(), nil
-		} else {
-			return x25519Recipient.String(), identity.String(), nil
-		}
-	} else {
-		return recipient.String(), "", nil
-	}
 }
 
-func NewCredentialsCli(
-	algorithm libfido2.CredentialType,
-	symmetric bool,
+func ListCredentials(
 	rpId string,
-) (string, string, error) {
-	displayMessage := func(message string) error {
-		fmt.Fprintf(os.Stderr, "[*] %s\n", message)
-		return nil
-	}
-	requestValue := func(message string, _ bool) (s string, err error) {
-		fmt.Fprintf(os.Stderr, message)
-		secretBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
-		if err != nil {
-			return "", err
-		}
+	ui UserInterface,
+) error {
+	ui.DisplayMessage("Please insert your token now...")
 
-		return string(secretBytes), nil
-	}
-	confirm := func(message, yes, no string) (choseYes bool, err error) {
-		answerYes, err := promptYesNo(fmt.Sprintf("[*] %s", message))
-		if err != nil {
-			return false, err
-		}
-
-		return answerYes, nil
-	}
-
-	return NewCredentials(
-		algorithm,
-		symmetric,
-		rpId,
-		displayMessage,
-		requestValue,
-		confirm,
-	)
-}
-
-func ListCredentialsCli(rpId string) error {
-	displayMessage := func(message string) error {
-		fmt.Fprintf(os.Stderr, "[*] %s\n", message)
-		return nil
-	}
-
-	displayMessage("Please insert your token now...")
-
-	device, err := FindDevice(50*time.Second, displayMessage)
+	device, err := FindDevice(50*time.Second, ui.DisplayMessage)
 	if err != nil {
 		return err
 	}

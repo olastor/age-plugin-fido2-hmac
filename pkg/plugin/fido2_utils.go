@@ -11,6 +11,12 @@ import (
 	"github.com/olastor/go-libfido2"
 )
 
+const (
+	fido2OptionClientPin        = "clientPin"
+	fido2OptionRk               = "rk"
+	fido2OptionMakeCredUvNotRqd = "makeCredUvNotRqd"
+)
+
 func listEligibleDevices() ([]*libfido2.Device, error) {
 	locs, err := libfido2.DeviceLocations()
 	if err != nil {
@@ -77,21 +83,23 @@ func FindDevice(
 	return nil, errors.New("timed out waiting for device")
 }
 
+func isDeviceOptionTrue(info *libfido2.DeviceInfo, optionName string) bool {
+	for _, option := range info.Options {
+		if option.Name != optionName {
+			continue
+		}
+		return option.Value == libfido2.True
+	}
+	return false
+}
+
 func HasPinSet(device *libfido2.Device) (bool, error) {
 	info, err := device.Info()
 	if err != nil {
 		return false, err
 	}
 
-	for _, option := range info.Options {
-		if option.Name != "clientPin" {
-			continue
-		}
-
-		return option.Value == "true", nil
-	}
-
-	return false, nil
+	return isDeviceOptionTrue(info, fido2OptionClientPin), nil
 }
 
 func prfSalt(salt []byte) []byte {

@@ -47,6 +47,23 @@ Environment Variables:
                   /dev/hid* paths are ephemeral and fido2 tokens (mostly) have no identifier.
                   Therefore, it's in general not recommended to use this environment variable.`
 
+func parseAlgorithm(algorithmFlag string) (libfido2.CredentialType, error) {
+	if algorithmFlag == "" {
+		return libfido2.ES256, nil
+	}
+
+	switch strings.TrimSpace(strings.ToLower(algorithmFlag)) {
+	case "es256":
+		return libfido2.ES256, nil
+	case "rs256":
+		return libfido2.RS256, nil
+	case "eddsa":
+		return libfido2.EDDSA, nil
+	default:
+		return 0, fmt.Errorf("unknown algorithm: \"%s\"", algorithmFlag)
+	}
+}
+
 func main() {
 	var (
 		pluginFlag          string
@@ -102,7 +119,8 @@ func main() {
 	}
 
 	if listFlag {
-		err := plugin.ListCredentialsCli(rpIdFlag)
+		ui := &plugin.TerminalUserInterface{}
+		err := plugin.ListCredentials(rpIdFlag, ui)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed: %s\n", err)
 			os.Exit(1)
@@ -113,23 +131,14 @@ func main() {
 	// TODO: validate RP ID
 
 	if generateFlag {
-		algorithm := libfido2.ES256
-
-		if algorithmFlag != "" {
-			switch strings.TrimSpace(strings.ToLower(algorithmFlag)) {
-			case "es256":
-				algorithm = libfido2.ES256
-			case "rs256":
-				algorithm = libfido2.RS256
-			case "eddsa":
-				algorithm = libfido2.EDDSA
-			default:
-				fmt.Fprintf(os.Stderr, "Unknown algorithm: \"%s\"", algorithmFlag)
-				os.Exit(1)
-			}
+		algorithm, err := parseAlgorithm(algorithmFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed: %s", err)
+			os.Exit(1)
 		}
 
-		recipientStr, identityStr, err := plugin.NewCredentialsCli(algorithm, symmetricFlag, rpIdFlag)
+		ui := &plugin.TerminalUserInterface{}
+		recipientStr, identityStr, err := plugin.NewCredentials(algorithm, symmetricFlag, rpIdFlag, ui)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed: %s", err)
 			os.Exit(1)
@@ -151,7 +160,7 @@ func main() {
 			os.Exit(1)
 		}
 		p.HandleRecipient(func(data []byte) (age.Recipient, error) {
-			r, err := plugin.ParseFido2HmacRecipient(page.EncodeRecipient("fido2-hmac", data))
+			r, err := plugin.ParseFido2HmacRecipient(page.EncodeRecipient(plugin.PLUGIN_NAME, data))
 			if err != nil {
 				return nil, err
 			}
@@ -167,7 +176,7 @@ func main() {
 			return r, nil
 		})
 		p.HandleIdentityAsRecipient(func(data []byte) (age.Recipient, error) {
-			i, err := plugin.ParseFido2HmacIdentity(page.EncodeIdentity("fido2-hmac", data))
+			i, err := plugin.ParseFido2HmacIdentity(page.EncodeIdentity(plugin.PLUGIN_NAME, data))
 			if err != nil {
 				return nil, err
 			}
@@ -193,7 +202,7 @@ func main() {
 			os.Exit(1)
 		}
 		p.HandleIdentity(func(data []byte) (age.Identity, error) {
-			i, err := plugin.ParseFido2HmacIdentity(page.EncodeIdentity("fido2-hmac", data))
+			i, err := plugin.ParseFido2HmacIdentity(page.EncodeIdentity(plugin.PLUGIN_NAME, data))
 			if err != nil {
 				return nil, err
 			}
