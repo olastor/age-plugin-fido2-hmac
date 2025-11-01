@@ -249,6 +249,7 @@ func NewCredentials(
 
 func ListCredentials(
 	rpId string,
+	exportSecretKey bool,
 	ui UserInterface,
 ) error {
 	ui.DisplayMessage("Please insert your token now...")
@@ -335,6 +336,10 @@ func ListCredentials(
 	identity.ClearSecret()
 	identityString := identity.String()
 	recipientString := x25519Recipient.String()
+
+	if exportSecretKey {
+		identityString = x25519Identity.String()
+	}
 
 	ui.DisplayResult(fmt.Sprintf("# public key: %s\n%s\n", recipientString, identityString))
 	return nil

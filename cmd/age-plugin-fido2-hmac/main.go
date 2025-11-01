@@ -29,6 +29,7 @@ Options:
     -r, --rp-id           Relying party ID for discoverable credentials.
                           Default: age-encryption.org
     -s, --symmetric       Use symmetric encryption.
+    --export-secret-key   Export the secret key for the selected credential instead of the public key.
     -v, --version         Show the version.
     -h, --help            Show this help message.
 
@@ -39,7 +40,8 @@ Examples:
   $ age -d -i identity.txt secret.enc # when you created an identity
   $ age -d -j fido2-hmac secret.enc # when there is no identity
   $ age-plugin-fido2-hmac -l # list credentials on token for default RP
-  $ age-plugin-fido2-hmac -r myapp.com -l # list credentials for specific RP
+  $ age-plugin-fido2-hmac -r myapp.com -l # list credentials for specific RP and optionally select a credential to show recipient and identity
+  $ age-plugin-fido2-hmac -r myapp.com -l --export-secret-key # export the raw secret key for the selected credential
 
 Environment Variables:
 
@@ -73,6 +75,7 @@ func main() {
 		helpFlag            bool
 		versionFlag         bool
 		symmetricFlag       bool
+		exportSecretKeyFlag bool
 		deprecatedMagicFlag bool
 		rpIdFlag            string
 	)
@@ -103,6 +106,8 @@ func main() {
 	flag.BoolVar(&versionFlag, "v", false, "")
 	flag.BoolVar(&versionFlag, "version", false, "")
 
+	flag.BoolVar(&exportSecretKeyFlag, "export-secret-key", false, "")
+
 	flag.BoolVar(&helpFlag, "h", false, "")
 	flag.BoolVar(&helpFlag, "help", false, "")
 
@@ -120,7 +125,7 @@ func main() {
 
 	if listFlag {
 		ui := &plugin.TerminalUserInterface{}
-		err := plugin.ListCredentials(rpIdFlag, ui)
+		err := plugin.ListCredentials(rpIdFlag, exportSecretKeyFlag, ui)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed: %s\n", err)
 			os.Exit(1)
