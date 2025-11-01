@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +16,8 @@ import (
 
 type UserInterface interface {
 	DisplayMessage(message string) error
-	RequestValue(message string, _ bool) (s string, err error)
+	DisplayResult(message string) error
+	RequestValue(message string, secret bool) (s string, err error)
 	Confirm(message, yes, no string) (choseYes bool, err error)
 }
 
@@ -26,14 +28,30 @@ func (u *TerminalUserInterface) DisplayMessage(message string) error {
 	return nil
 }
 
-func (u *TerminalUserInterface) RequestValue(message string, _ bool) (s string, err error) {
-	fmt.Fprintf(os.Stderr, message)
-	secretBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+func (u *TerminalUserInterface) DisplayResult(message string) error {
+	fmt.Fprintf(os.Stdout, "%s\n", message)
+	return nil
+}
+
+func (u *TerminalUserInterface) RequestValue(message string, secret bool) (s string, err error) {
+	fmt.Fprintf(os.Stderr, "%s", message)
+	if secret {
+		secretBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(os.Stderr, "\n")
+
+		return string(secretBytes), nil
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
 	if err != nil {
 		return "", err
 	}
 
-	return string(secretBytes), nil
+	return strings.TrimSpace(input), nil
 }
 
 func (u *TerminalUserInterface) Confirm(message, yes, no string) (choseYes bool, err error) {
@@ -240,20 +258,19 @@ func ListCredentials(
 		return err
 	}
 
-	hasPinSet, err := HasPinSet(device)
+	deviceInfo, err := device.Info()
 	if err != nil {
 		return err
 	}
 
-	pin := ""
-	if hasPinSet {
-		fmt.Fprintf(os.Stderr, "[*] Please enter your PIN: ")
-		pinBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Fprintf(os.Stderr, "\n")
-		if err != nil {
-			return err
-		}
-		pin = string(pinBytes)
+	hasPinSet := isDeviceOptionTrue(deviceInfo, fido2OptionClientPin)
+	if !hasPinSet {
+		return fmt.Errorf("no PIN set on the token, cannot list credentials")
+	}
+
+	pin, err := ui.RequestValue("Please enter your PIN: ", true)
+	if err != nil {
+		return err
 	}
 
 	credentials, err := listCredentials(device, rpId, pin)
@@ -262,45 +279,63 @@ func ListCredentials(
 	}
 
 	if len(credentials) == 0 {
-		fmt.Fprintf(os.Stdout, "No credentials found for %s\n", rpId)
+		ui.DisplayMessage(fmt.Sprintf("No credentials found for %s", rpId))
 		return nil
 	}
 
-	fmt.Fprintf(os.Stdout, "Credentials for %s:\n\n", rpId)
+	listMessage := fmt.Sprintf("Credentials for %s:\n", rpId)
 	for i, cred := range credentials {
 		if !strings.HasPrefix(cred.User.Name, fmt.Sprintf("age-plugin-%s", PLUGIN_NAME)) {
 			continue
 		}
 
-		fmt.Fprintf(os.Stdout, "Credential %d:\n", i+1)
-		fmt.Fprintf(os.Stdout, "  Name:    %s\n", cred.User.Name)
+		listMessage += fmt.Sprintf("\t%d: %s\n", i, cred.User.Name)
+	}
+	ui.DisplayMessage(listMessage)
 
-		identity := &Fido2HmacIdentity{
-			Version: 3,
-			// TODO: fix for credentials without pin set
-			RequirePin: true,
-			UserId:     cred.User.ID,
-			RpId:       rpId,
-			CredId:     cred.ID,
-			Device:     device,
-		}
-		_, err = identity.obtainSecretFromToken(pin)
-		if err != nil {
-			return err
-		}
-		x25519Identity, err := identity.X25519Identity()
-		if err != nil {
-			return err
-		}
-		x25519Recipient := x25519Identity.Recipient()
-		identity.ClearSecret()
-		identityString := identity.String()
-		recipientString := x25519Recipient.String()
-
-		fmt.Fprintf(os.Stdout, "  Recipient:\t%s\n", recipientString)
-		fmt.Fprintf(os.Stdout, "  Identity:\t%s\n", identityString)
-		fmt.Fprintf(os.Stdout, "\n")
+	selectedIndexString, err := ui.RequestValue("Please enter the index of the credential you want to use: ", false)
+	if err != nil {
+		return err
 	}
 
+	selectedIndex, err := strconv.Atoi(selectedIndexString)
+	if err != nil {
+		return err
+	}
+
+	if selectedIndex < 0 || selectedIndex >= len(credentials) {
+		return fmt.Errorf("selected index is out of range")
+	}
+
+	cred := credentials[selectedIndex]
+
+	requirePin, err := ui.Confirm("Do you want to require a PIN for decryption?", "yes", "no")
+	if err != nil {
+		return err
+	}
+
+	identity := &Fido2HmacIdentity{
+		Version:    3,
+		RequirePin: requirePin,
+		UserId:     cred.User.ID,
+		RpId:       rpId,
+		CredId:     cred.ID,
+		Device:     device,
+	}
+
+	_, err = identity.obtainSecretFromToken(pin)
+	if err != nil {
+		return err
+	}
+	x25519Identity, err := identity.X25519Identity()
+	if err != nil {
+		return err
+	}
+	x25519Recipient := x25519Identity.Recipient()
+	identity.ClearSecret()
+	identityString := identity.String()
+	recipientString := x25519Recipient.String()
+
+	ui.DisplayResult(fmt.Sprintf("# public key: %s\n%s\n", recipientString, identityString))
 	return nil
 }

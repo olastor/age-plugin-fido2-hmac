@@ -93,15 +93,6 @@ func isDeviceOptionTrue(info *libfido2.DeviceInfo, optionName string) bool {
 	return false
 }
 
-func HasPinSet(device *libfido2.Device) (bool, error) {
-	info, err := device.Info()
-	if err != nil {
-		return false, err
-	}
-
-	return isDeviceOptionTrue(info, fido2OptionClientPin), nil
-}
-
 func prfSalt(salt []byte) []byte {
 	// see https://www.w3.org/TR/webauthn-3/#prf-extension
 	h := sha256.New()
