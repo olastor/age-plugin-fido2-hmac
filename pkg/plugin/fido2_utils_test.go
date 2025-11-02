@@ -2,9 +2,10 @@ package plugin
 
 import (
 	"fmt"
-	"github.com/olastor/go-libfido2"
 	"reflect"
 	"testing"
+
+	"github.com/olastor/go-libfido2"
 )
 
 func TestEnforcePin(t *testing.T) {
@@ -36,12 +37,12 @@ func TestEnforcePin(t *testing.T) {
 		t.Error(err)
 	}
 
-	secretPin, err := getHmacSecret(dev, i.CredId, i.Salt, "1234")
+	secretPin, err := getHmacSecret(dev, DEFAULT_RELYING_PARTY, i.CredId, i.Salt, "1234")
 	if err != nil {
 		t.Error(err)
 	}
 
-	secretNoPin, err := getHmacSecret(dev, i.CredId, i.Salt, "")
+	secretNoPin, err := getHmacSecret(dev, DEFAULT_RELYING_PARTY, i.CredId, i.Salt, "")
 	if err != nil {
 		t.Error(err)
 	}

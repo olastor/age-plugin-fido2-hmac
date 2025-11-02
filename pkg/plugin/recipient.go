@@ -58,6 +58,7 @@ func (r *Fido2HmacRecipient) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 			CredId:     r.CredId,
 			Plugin:     r.Plugin,
 			Device:     r.Device,
+			RpId:       DEFAULT_RELYING_PARTY,
 		}
 
 		stanzas, err := identity.Wrap(fileKey)
@@ -94,7 +95,7 @@ func (r *Fido2HmacRecipient) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 		}
 
 		version := make([]byte, 2)
-		binary.BigEndian.PutUint16(version, uint16(STANZA_FORMAT_VERSION))
+		binary.BigEndian.PutUint16(version, uint16(2))
 
 		stanzaArgs := make([]string, 5)
 		stanzaArgs[0] = b64.EncodeToString(version)

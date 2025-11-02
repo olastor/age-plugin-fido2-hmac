@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -8,6 +9,12 @@ import (
 	"time"
 
 	"github.com/olastor/go-libfido2"
+)
+
+const (
+	fido2OptionClientPin        = "clientPin"
+	fido2OptionRk               = "rk"
+	fido2OptionMakeCredUvNotRqd = "makeCredUvNotRqd"
 )
 
 func listEligibleDevices() ([]*libfido2.Device, error) {
@@ -73,24 +80,26 @@ func FindDevice(
 		time.Sleep(200 * time.Millisecond)
 	}
 
-	return nil, errors.New("Timed out waiting for device.")
+	return nil, errors.New("timed out waiting for device")
 }
 
-func HasPinSet(device *libfido2.Device) (bool, error) {
-	info, err := device.Info()
-	if err != nil {
-		return false, err
-	}
-
+func isDeviceOptionTrue(info *libfido2.DeviceInfo, optionName string) bool {
 	for _, option := range info.Options {
-		if option.Name != "clientPin" {
+		if option.Name != optionName {
 			continue
 		}
-
-		return option.Value == "true", nil
+		return option.Value == libfido2.True
 	}
+	return false
+}
 
-	return false, nil
+func prfSalt(salt []byte) []byte {
+	// see https://www.w3.org/TR/webauthn-3/#prf-extension
+	h := sha256.New()
+	h.Write([]byte("WebAuthn PRF"))
+	h.Write([]byte{0})
+	h.Write(salt)
+	return h.Sum(nil)
 }
 
 func generateNewCredential(
@@ -105,7 +114,7 @@ func generateNewCredential(
 	attest, err := device.MakeCredential(
 		cdh,
 		libfido2.RelyingParty{
-			ID: RELYING_PARTY,
+			ID: DEFAULT_RELYING_PARTY,
 		},
 		libfido2.User{
 			ID:   userId,
@@ -115,7 +124,7 @@ func generateNewCredential(
 		pin,
 		&libfido2.MakeCredentialOpts{
 			Extensions: []libfido2.Extension{libfido2.HMACSecretExtension},
-			RK:         "false",
+			RK:         libfido2.False,
 		},
 	)
 
@@ -126,15 +135,76 @@ func generateNewCredential(
 	return attest.CredentialID, nil
 }
 
-func getHmacSecret(device *libfido2.Device, credId []byte, salt []byte, pin string) ([]byte, error) {
+func generateNewCredentialV3(
+	device *libfido2.Device,
+	pin string,
+	algorithm libfido2.CredentialType,
+	rpId string,
+) (credId []byte, userId []byte, error error) {
+	cdh := libfido2.RandBytes(32)
+	userId = libfido2.RandBytes(32)
+
+	// generate descriptive credential name with timestamp
+	now := time.Now()
+	userName := fmt.Sprintf("age-plugin-%s (%s)", PLUGIN_NAME, now.Format("06-01-02T15:04:05"))
+
+	attest, err := device.MakeCredential(
+		cdh,
+		libfido2.RelyingParty{
+			ID: rpId,
+		},
+		libfido2.User{
+			ID:   userId,
+			Name: userName,
+		},
+		algorithm,
+		pin,
+		&libfido2.MakeCredentialOpts{
+			Extensions: []libfido2.Extension{libfido2.HMACSecretExtension},
+			RK:         libfido2.True,
+		},
+	)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return attest.CredentialID, userId, nil
+}
+
+func listCredentials(device *libfido2.Device, rpId string, pin string) ([]*libfido2.Credential, error) {
+	credentials, err := device.Credentials(rpId, pin)
+	if err != nil {
+		return nil, err
+	}
+
+	return credentials, nil
+}
+
+func getDiscoverableCredential(device *libfido2.Device, rpId string, userId []byte, pin string) (*libfido2.Credential, error) {
+	credentials, err := listCredentials(device, rpId, pin)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, credential := range credentials {
+		if slices.Equal(credential.User.ID, userId) {
+			return credential, nil
+		}
+	}
+
+	return nil, errors.New("credential not found")
+}
+
+func getHmacSecret(device *libfido2.Device, rpId string, credId []byte, salt []byte, pin string) ([]byte, error) {
 	if len(salt) != 32 {
-		return nil, errors.New("Salt must be 32 bytes!")
+		return nil, errors.New("salt must be 32 bytes")
 	}
 
 	cdh := libfido2.RandBytes(32)
 
 	assertion, err := device.Assertion(
-		RELYING_PARTY,
+		rpId,
 		cdh,
 		[][]byte{credId},
 		pin,
@@ -153,4 +223,13 @@ func getHmacSecret(device *libfido2.Device, credId []byte, salt []byte, pin stri
 	}
 
 	return assertion.HMACSecret, nil
+}
+
+func getHmacSecretDiscoverable(device *libfido2.Device, rpId string, userId []byte, salt []byte, pin string) ([]byte, error) {
+	credential, err := getDiscoverableCredential(device, rpId, userId, pin)
+	if err != nil {
+		return nil, err
+	}
+
+	return getHmacSecret(device, rpId, credential.ID, salt, pin)
 }
