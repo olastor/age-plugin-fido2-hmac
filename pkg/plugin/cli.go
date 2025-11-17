@@ -74,6 +74,11 @@ func NewCredentials(
 	rpId string,
 	ui UserInterface,
 ) (recipientString, identityString string, err error) {
+	err = validateRPID(rpId)
+	if err != nil {
+		return "", "", err
+	}
+
 	var device *libfido2.Device
 
 	ui.DisplayMessage("Please insert your token now...")
@@ -253,6 +258,11 @@ func ListCredentials(
 	exportSecretKey bool,
 	ui UserInterface,
 ) error {
+	err := validateRPID(rpId)
+	if err != nil {
+		return err
+	}
+
 	ui.DisplayMessage("Please insert your token now...")
 
 	device, err := FindDevice(50*time.Second, ui.DisplayMessage)

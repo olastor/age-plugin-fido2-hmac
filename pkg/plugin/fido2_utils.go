@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"slices"
 	"time"
@@ -232,4 +233,25 @@ func getHmacSecretDiscoverable(device *libfido2.Device, rpId string, userId []by
 	}
 
 	return getHmacSecret(device, rpId, credential.ID, salt, pin)
+}
+
+// checks if a string is a valid RP ID
+// most likely passes some invalid strings,
+// but for this plugin it should be good enough
+// see https://www.w3.org/TR/webauthn-2/#rp-id
+func validateRPID(rpID string) error {
+	if rpID == "" {
+		return fmt.Errorf("RP ID cannot be empty")
+	}
+
+	u, err := url.Parse("https://" + rpID)
+	if err != nil {
+		return fmt.Errorf("invalid RP ID: %w", err)
+	}
+
+	if u.Hostname() != rpID {
+		return fmt.Errorf("invalid RP ID format")
+	}
+
+	return nil
 }
