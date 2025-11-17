@@ -77,6 +77,7 @@ func TestIdentityFormat(t *testing.T) {
 			Salt:       salt,
 			CredId:     credId,
 			RequirePin: requirePin,
+			RpId:       "age-encryption.org",
 		}
 
 		id2, err := ParseFido2HmacIdentity(id.String())
@@ -98,6 +99,7 @@ func TestIdentityFormat(t *testing.T) {
 		}
 
 		id2.secretKey = secretKey
+
 		if !reflect.DeepEqual(id, id2) {
 			t.Error("Identities have changed")
 		}
