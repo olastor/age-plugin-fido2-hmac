@@ -133,8 +133,6 @@ func main() {
 		os.Exit(0)
 	}
 
-	// TODO: validate RP ID
-
 	if generateFlag {
 		algorithm, err := parseAlgorithm(algorithmFlag)
 		if err != nil {
