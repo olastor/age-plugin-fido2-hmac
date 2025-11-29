@@ -16,25 +16,32 @@ import (
 var Version string
 
 const USAGE = `Usage:
-  age-plugin-fido2-hmac [-s] [-a ALG] -g
+  age-plugin-fido2-hmac [-a ALG] [-r RP_ID] [-s] -g
+  age-plugin-fido2-hmac [-r RP_ID] -l
   age-plugin-fido2-hmac -m
 
 Options:
     -g, --generate        Generate new credentials interactively.
-    -s, --symmetric       Use symmetric encryption and use a new salt for every encryption.
-                          The token must be present for every operation.
+    -l, --list            List all discoverable credentials on the token.
     -m, --magic-identity  Print the magic identity to use when no identity is required.
     -a, --algorithm       Choose a specific algorithm when creating the fido2 credential.
                           Can be one of 'es256', 'eddsa', or 'rs256'. Default: es256
+    -r, --rp-id           Relying party ID for discoverable credentials.
+                          Default: age-encryption.org
+    -s, --symmetric       Use symmetric encryption.
+    --export-secret-key   Export the secret key for the selected credential instead of the public key.
     -v, --version         Show the version.
     -h, --help            Show this help message.
 
 Examples:
-  $ age-plugin-fido2-hmac -g > identity.txt # only contains an identity if chosen by user
+  $ age-plugin-fido2-hmac -g > identity.txt
   $ cat identity.txt | grep 'public key' | grep -oP 'age1.*' > recipient.txt
   $ echo 'secret' | age -R recipient.txt -o secret.enc
   $ age -d -i identity.txt secret.enc # when you created an identity
   $ age -d -j fido2-hmac secret.enc # when there is no identity
+  $ age-plugin-fido2-hmac -l # list credentials on token for default RP
+  $ age-plugin-fido2-hmac -r myapp.com -l # list credentials for specific RP and optionally select a credential to show recipient and identity
+  $ age-plugin-fido2-hmac -r myapp.com -l --export-secret-key # export the raw secret key for the selected credential
 
 Environment Variables:
 
@@ -42,15 +49,35 @@ Environment Variables:
                   /dev/hid* paths are ephemeral and fido2 tokens (mostly) have no identifier.
                   Therefore, it's in general not recommended to use this environment variable.`
 
+func parseAlgorithm(algorithmFlag string) (libfido2.CredentialType, error) {
+	if algorithmFlag == "" {
+		return libfido2.ES256, nil
+	}
+
+	switch strings.TrimSpace(strings.ToLower(algorithmFlag)) {
+	case "es256":
+		return libfido2.ES256, nil
+	case "rs256":
+		return libfido2.RS256, nil
+	case "eddsa":
+		return libfido2.EDDSA, nil
+	default:
+		return 0, fmt.Errorf("unknown algorithm: \"%s\"", algorithmFlag)
+	}
+}
+
 func main() {
 	var (
 		pluginFlag          string
 		algorithmFlag       string
 		generateFlag        bool
+		listFlag            bool
 		helpFlag            bool
 		versionFlag         bool
 		symmetricFlag       bool
+		exportSecretKeyFlag bool
 		deprecatedMagicFlag bool
+		rpIdFlag            string
 	)
 
 	flag.Usage = func() { fmt.Fprintf(os.Stderr, "%s\n", USAGE) }
@@ -60,9 +87,15 @@ func main() {
 	flag.StringVar(&algorithmFlag, "a", "es256", "")
 	flag.StringVar(&algorithmFlag, "algorithm", "es256", "")
 
+	flag.StringVar(&rpIdFlag, "r", plugin.DEFAULT_RELYING_PARTY, "")
+	flag.StringVar(&rpIdFlag, "rp-id", plugin.DEFAULT_RELYING_PARTY, "")
+
 	flag.BoolVar(&generateFlag, "g", false, "")
 	flag.BoolVar(&generateFlag, "generate", false, "")
 	flag.BoolVar(&generateFlag, "n", false, "")
+
+	flag.BoolVar(&listFlag, "l", false, "")
+	flag.BoolVar(&listFlag, "list", false, "")
 
 	flag.BoolVar(&deprecatedMagicFlag, "m", false, "")
 	flag.BoolVar(&deprecatedMagicFlag, "magic-identity", false, "")
@@ -72,6 +105,8 @@ func main() {
 
 	flag.BoolVar(&versionFlag, "v", false, "")
 	flag.BoolVar(&versionFlag, "version", false, "")
+
+	flag.BoolVar(&exportSecretKeyFlag, "export-secret-key", false, "")
 
 	flag.BoolVar(&helpFlag, "h", false, "")
 	flag.BoolVar(&helpFlag, "help", false, "")
@@ -88,24 +123,25 @@ func main() {
 		os.Exit(0)
 	}
 
-	if generateFlag {
-		algorithm := libfido2.ES256
+	if listFlag {
+		ui := &plugin.TerminalUserInterface{}
+		err := plugin.ListCredentials(rpIdFlag, exportSecretKeyFlag, ui)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed: %s\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 
-		if algorithmFlag != "" {
-			switch strings.TrimSpace(strings.ToLower(algorithmFlag)) {
-			case "es256":
-				algorithm = libfido2.ES256
-			case "rs256":
-				algorithm = libfido2.RS256
-			case "eddsa":
-				algorithm = libfido2.EDDSA
-			default:
-				fmt.Fprintf(os.Stderr, "Unknown algorithm: \"%s\"", algorithmFlag)
-				os.Exit(1)
-			}
+	if generateFlag {
+		algorithm, err := parseAlgorithm(algorithmFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed: %s", err)
+			os.Exit(1)
 		}
 
-		recipientStr, identityStr, err := plugin.NewCredentialsCli(algorithm, symmetricFlag)
+		ui := &plugin.TerminalUserInterface{}
+		recipientStr, identityStr, err := plugin.NewCredentials(algorithm, symmetricFlag, rpIdFlag, ui)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed: %s", err)
 			os.Exit(1)
@@ -127,7 +163,7 @@ func main() {
 			os.Exit(1)
 		}
 		p.HandleRecipient(func(data []byte) (age.Recipient, error) {
-			r, err := plugin.ParseFido2HmacRecipient(page.EncodeRecipient("fido2-hmac", data))
+			r, err := plugin.ParseFido2HmacRecipient(page.EncodeRecipient(plugin.PLUGIN_NAME, data))
 			if err != nil {
 				return nil, err
 			}
@@ -143,7 +179,7 @@ func main() {
 			return r, nil
 		})
 		p.HandleIdentityAsRecipient(func(data []byte) (age.Recipient, error) {
-			i, err := plugin.ParseFido2HmacIdentity(page.EncodeIdentity("fido2-hmac", data))
+			i, err := plugin.ParseFido2HmacIdentity(page.EncodeIdentity(plugin.PLUGIN_NAME, data))
 			if err != nil {
 				return nil, err
 			}
@@ -169,7 +205,7 @@ func main() {
 			os.Exit(1)
 		}
 		p.HandleIdentity(func(data []byte) (age.Identity, error) {
-			i, err := plugin.ParseFido2HmacIdentity(page.EncodeIdentity("fido2-hmac", data))
+			i, err := plugin.ParseFido2HmacIdentity(page.EncodeIdentity(plugin.PLUGIN_NAME, data))
 			if err != nil {
 				return nil, err
 			}

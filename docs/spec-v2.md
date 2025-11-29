@@ -1,7 +1,7 @@
-# Plugin Specification: age-plugin-fido2-hmac
+# Version 2 (Non-discoverable Credentials for Asymmetric Encryption)
 
 - Version: 2.0.0
-- Status: Draft
+- Status: Implemented
 
 # Motivation
 

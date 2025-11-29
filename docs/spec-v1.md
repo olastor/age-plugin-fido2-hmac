@@ -1,7 +1,7 @@
-# Plugin Specification: age-plugin-fido2-hmac
+# Version 1 (Non-discoverable Credentials for Symmetric Encryption)
 
 - Version: 1.0.0
-- Status: Draft
+- Status: Implemented
 
 # Motivation
 

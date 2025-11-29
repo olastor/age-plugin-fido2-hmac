@@ -50,14 +50,14 @@ func (i *Fido2HmacIdentity) Recipient() (*Fido2HmacRecipient, error) {
 			CredId:         i.CredId,
 		}, nil
 	default:
-		return nil, fmt.Errorf("unsupported identity version %x", i.Version)
+		return nil, fmt.Errorf("unsupported for identity version %x", i.Version)
 	}
 }
 
 // the pin can be passed if it's known already to avoid re-asking, but it's optional
 func (i *Fido2HmacIdentity) obtainSecretFromToken(pin string) (string, error) {
 	if i.Device == nil {
-		return pin, fmt.Errorf("device not specified, cannot obtain secret.")
+		return pin, fmt.Errorf("device not specified, cannot obtain secret")
 	}
 
 	if i.RequirePin && pin == "" {
@@ -84,10 +84,22 @@ func (i *Fido2HmacIdentity) obtainSecretFromToken(pin string) (string, error) {
 		return pin, err
 	}
 
+	assertionPin := ""
 	if i.RequirePin {
-		i.secretKey, err = getHmacSecret(i.Device, i.CredId, i.Salt, pin)
+		assertionPin = pin
+	}
+
+	salt := i.Salt
+	if i.Version == 3 {
+		salt = prfSalt(i.UserId)
+	}
+
+	if i.CredId != nil {
+		i.secretKey, err = getHmacSecret(i.Device, i.RpId, i.CredId, salt, assertionPin)
+	} else if i.Version == 3 {
+		i.secretKey, err = getHmacSecretDiscoverable(i.Device, i.RpId, i.UserId, salt, assertionPin)
 	} else {
-		i.secretKey, err = getHmacSecret(i.Device, i.CredId, i.Salt, "")
+		return pin, fmt.Errorf("credential ID is required for version 1 and 2")
 	}
 
 	if err != nil {
@@ -171,6 +183,20 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 
 		// encrypting with an identity means we can use an X25519 stanza
 		return x25519Recipient.Wrap(fileKey)
+	case 3:
+		_, err := i.obtainSecretFromToken("")
+		if err != nil {
+			return nil, err
+		}
+
+		x25519Identity, err := i.X25519Identity()
+		if err != nil {
+			return nil, err
+		}
+
+		x25519Recipient := x25519Identity.Recipient()
+
+		return x25519Recipient.Wrap(fileKey)
 	default:
 		return nil, fmt.Errorf("unsupported recipient version %x", i.Version)
 	}
@@ -192,7 +218,7 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 			}
 
 			pluginStanzas = append(pluginStanzas, stanzaData)
-		} else if stanza.Type == "X25519" && i.Version == 2 {
+		} else if stanza.Type == "X25519" && (i.Version == 2 || i.Version == 3) {
 			x25519Stanzas = append(x25519Stanzas, stanza)
 		}
 	}
@@ -214,8 +240,8 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 
 	var err error
 
-	// if the version is two and there is a cred id we expect to unwrap x25519 stanzas
-	if i.Version == 2 && i.CredId != nil && len(x25519Stanzas) > 0 {
+	// if the version is three, or two and there is a cred id, we expect to unwrap x25519 stanzas
+	if len(x25519Stanzas) > 0 && (i.Version == 2 && i.CredId != nil || i.Version == 3) {
 		if i.secretKey == nil {
 			pin, err = i.obtainSecretFromToken(pin)
 			if err != nil {
@@ -397,6 +423,17 @@ func (i *Fido2HmacIdentity) String() string {
 			[]byte{requirePinByte},
 			i.Salt,
 			i.CredId,
+		)
+
+		s, _ := bech32.Encode(IDENTITY_HRP, data)
+
+		return strings.ToUpper(s)
+	case 3:
+		data := slices.Concat(
+			version,
+			[]byte{requirePinByte},
+			i.UserId,
+			[]byte(i.RpId),
 		)
 
 		s, _ := bech32.Encode(IDENTITY_HRP, data)
