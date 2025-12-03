@@ -112,10 +112,10 @@ func main() {
 		}
 
 		if identityStr != "" {
-			fmt.Fprintf(os.Stdout, "# public key: %s\n%s\n", recipientStr, identityStr)
+			_, _ = fmt.Fprintf(os.Stdout, "# public key: %s\n%s\n", recipientStr, identityStr)
 		} else {
-			fmt.Fprint(os.Stdout, "# for decryption, use `age -d -j fido2-hmac` without any identity file.\n")
-			fmt.Fprintf(os.Stdout, "# public key: %s\n%s\n", recipientStr, identityStr)
+			_, _ = fmt.Fprint(os.Stdout, "# for decryption, use `age -d -j fido2-hmac` without any identity file.\n")
+			_, _ = fmt.Fprintf(os.Stdout, "# public key: %s\n%s\n", recipientStr, identityStr)
 		}
 
 		os.Exit(0)

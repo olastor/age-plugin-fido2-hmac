@@ -46,16 +46,16 @@ func FindDevice(
 ) (*libfido2.Device, error) {
 	devicePathFromEnv := os.Getenv("FIDO2_TOKEN")
 	if devicePathFromEnv != "" {
-		displayMessage(fmt.Sprintf("Using device path from env: %s", devicePathFromEnv))
+		err := displayMessage(fmt.Sprintf("Using device path from env: %s", devicePathFromEnv))
+		if err != nil {
+			return nil, err
+		}
 		return libfido2.NewDevice(devicePathFromEnv)
 	}
 
 	start := time.Now()
 
-	for {
-		if time.Since(start) >= timeout {
-			break
-		}
+	for time.Since(start) < timeout {
 
 		devs, err := listEligibleDevices()
 		if err != nil {
@@ -66,14 +66,17 @@ func FindDevice(
 			return devs[0], nil
 		} else if len(devs) > 1 {
 			msg := fmt.Sprintf("Found %d devices. Please touch the one you want to use.", len(devs))
-			displayMessage(msg)
+			err := displayMessage(msg)
+			if err != nil {
+				return nil, err
+			}
 			return libfido2.SelectDevice(devs, 10*time.Second)
 		}
 
 		time.Sleep(200 * time.Millisecond)
 	}
 
-	return nil, errors.New("Timed out waiting for device.")
+	return nil, errors.New("timed out waiting for device")
 }
 
 func HasPinSet(device *libfido2.Device) (bool, error) {
@@ -128,7 +131,7 @@ func generateNewCredential(
 
 func getHmacSecret(device *libfido2.Device, credId []byte, salt []byte, pin string) ([]byte, error) {
 	if len(salt) != 32 {
-		return nil, errors.New("Salt must be 32 bytes!")
+		return nil, errors.New("salt must be 32 bytes")
 	}
 
 	cdh := libfido2.RandBytes(32)

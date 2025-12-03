@@ -21,8 +21,12 @@ func TestEnforcePin(t *testing.T) {
 
 	dev, _ = libfido2.NewDevice(locs[0].Path)
 	info, _ := dev.Info()
-	aaguid := fmt.Sprintf("%s", info.AAGUID)
-	if info == nil || aaguid != "AAGUID0123456789" {
+	if info == nil {
+		fmt.Printf("Testing with virtual test device not possible.\n")
+		return
+	}
+	aaguid := string(info.AAGUID)
+	if aaguid != "AAGUID0123456789" {
 		fmt.Printf("Testing with virtual test device not possible.\n")
 		return
 	}

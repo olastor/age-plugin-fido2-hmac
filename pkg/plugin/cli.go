@@ -3,13 +3,14 @@ package plugin
 import (
 	"bufio"
 	"crypto/rand"
-	"filippo.io/age"
 	"fmt"
-	"github.com/olastor/go-libfido2"
-	"golang.org/x/term"
 	"os"
 	"strings"
 	"time"
+
+	"filippo.io/age"
+	"github.com/olastor/go-libfido2"
+	"golang.org/x/term"
 )
 
 func promptYesNo(s string) (bool, error) {
@@ -34,9 +35,12 @@ func NewCredentials(
 ) (string, string, error) {
 	var device *libfido2.Device
 
-	displayMessage("Please insert your token now...")
+	err := displayMessage("Please insert your token now...")
+	if err != nil {
+		return "", "", err
+	}
 
-	device, err := FindDevice(50*time.Second, displayMessage)
+	device, err = FindDevice(50*time.Second, displayMessage)
 	if err != nil {
 		return "", "", err
 	}
@@ -54,7 +58,10 @@ func NewCredentials(
 		}
 	}
 
-	displayMessage("Please touch your token...")
+	err = displayMessage("Please touch your token...")
+	if err != nil {
+		return "", "", err
+	}
 	credId, err := generateNewCredential(device, pin, algorithm)
 	if err != nil {
 		return "", "", err
@@ -124,6 +131,9 @@ func NewCredentials(
 		"yes",
 		"no",
 	)
+	if err != nil {
+		return "", "", err
+	}
 
 	if wantsSeparateIdentity {
 		if recipient.Version == 1 {
@@ -145,7 +155,7 @@ func NewCredentialsCli(
 		return nil
 	}
 	requestValue := func(message string, _ bool) (s string, err error) {
-		fmt.Fprintf(os.Stderr, message)
+		fmt.Fprint(os.Stderr, message)
 		secretBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
 		if err != nil {
 			return "", err

@@ -10,5 +10,11 @@ test-e2e: build
 format:
 	go fmt ./pkg/... ./cmd/...
 
+lint:
+	golangci-lint run
+
+lint-fix:
+	golangci-lint run --fix
+
 clean:
 	rm -f age-plugin-fido2-hmac

@@ -57,7 +57,7 @@ func (i *Fido2HmacIdentity) Recipient() (*Fido2HmacRecipient, error) {
 // the pin can be passed if it's known already to avoid re-asking, but it's optional
 func (i *Fido2HmacIdentity) obtainSecretFromToken(pin string) (string, error) {
 	if i.Device == nil {
-		return pin, fmt.Errorf("device not specified, cannot obtain secret.")
+		return pin, fmt.Errorf("device not specified, cannot obtain secret")
 	}
 
 	if i.RequirePin && pin == "" {
@@ -266,7 +266,7 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 			id.RequirePin = fidoStanza.RequirePin
 		}
 
-		if !(i.Version == 2 && i.secretKey != nil && slices.Equal(i.CredId, id.CredId)) {
+		if i.Version != 2 || i.secretKey == nil || !slices.Equal(i.CredId, id.CredId) {
 			if (i.RequirePin || fidoStanza.RequirePin) && pin == "" {
 				pin, err = i.RequestSecret("Please enter you PIN:")
 				if err != nil {
@@ -295,10 +295,13 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 			}
 
 			plaintext, err := aead.Open(nil, id.Nonce, fidoStanza.Body, nil)
-			mlock.Mlock(plaintext)
-
 			if err != nil {
 				continue
+			}
+
+			err = mlock.Mlock(plaintext)
+			if err != nil {
+				return nil, err
 			}
 
 			return plaintext, nil
