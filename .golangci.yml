@@ -1,5 +1,6 @@
-version: 2
+version: "2"
 
-run:
-  skip-dirs:
-    - nitrokey-3-firmware
+linters:
+  exclusions:
+    paths:
+      - nitrokey-3-firmware
