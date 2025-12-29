@@ -142,8 +142,8 @@ func main() {
 			r.Plugin = p
 			return r, nil
 		})
-		p.HandleIdentityAsRecipient(func(data []byte) (age.Recipient, error) {
-			i, err := plugin.ParseFido2HmacIdentity(page.EncodeIdentity("fido2-hmac", data))
+		p.HandleIdentityEncodingAsRecipient(func(identity string) (age.Recipient, error) {
+			i, err := plugin.ParseFido2HmacIdentity(identity)
 			if err != nil {
 				return nil, err
 			}
