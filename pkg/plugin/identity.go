@@ -60,7 +60,8 @@ func (i *Fido2HmacIdentity) obtainSecretFromToken(pin string) (string, error) {
 
 	if i.RequirePin && pin == "" {
 		msg := "Please enter your PIN:"
-		pin, err := i.RequestSecret(msg)
+		var err error
+		pin, err = i.RequestSecret(msg)
 		if err != nil {
 			return pin, err
 		}
