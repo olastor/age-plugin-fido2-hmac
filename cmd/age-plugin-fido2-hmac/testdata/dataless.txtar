@@ -1,0 +1,35 @@
+# for this test the virtual device must use `--ifs e2e/test_device.bin` !
+
+ttyin -stdin encrypt-yes-pin
+exec age -e -j fido2-hmac -o cipher1.enc plaintext
+
+ttyin -stdin pin
+exec age -d -j fido2-hmac cipher1.enc
+cmp stdout plaintext
+
+ttyin -stdin encrypt-no-pin
+exec age -e -j fido2-hmac -o cipher2.enc plaintext
+
+exec age -d -j fido2-hmac cipher2.enc
+cmp stdout plaintext
+
+ttyin -stdin wrong-pin
+! exec age -e -j fido2-hmac -o cipher1.enc plaintext
+stderr 'pin invalid'
+
+
+-- magic.txt --
+AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76
+-- encrypt-yes-pin --
+1234
+1
+-- encrypt-no-pin --
+1234
+2
+-- pin --
+1234
+-- wrong-pin --
+3333
+-- plaintext --
+plaintext
+-- the end --

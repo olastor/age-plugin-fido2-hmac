@@ -105,10 +105,25 @@ func main() {
 			}
 		}
 
-		recipientStr, identityStr, err := plugin.NewCredentialsCli(algorithm, symmetricFlag)
+		x25519Recipient, fido2HmacRecipient, fido2HmacIdentity, err := plugin.NewCredentialsCli(algorithm, symmetricFlag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed: %s", err)
 			os.Exit(1)
+		}
+
+		recipientStr := ""
+		identityStr := ""
+
+		if fido2HmacRecipient != nil {
+			recipientStr = fido2HmacRecipient.String()
+		}
+
+		if x25519Recipient != nil {
+			recipientStr = x25519Recipient.String()
+		}
+
+		if fido2HmacIdentity != nil {
+			identityStr = fido2HmacIdentity.String()
 		}
 
 		if identityStr != "" {
@@ -143,6 +158,40 @@ func main() {
 			return r, nil
 		})
 		p.HandleIdentityEncodingAsRecipient(func(identity string) (age.Recipient, error) {
+			if plugin.IsDatalessIdentity(identity) {
+				// generate a new recipient "on the fly"
+
+				ui := page.ClientUI{
+					Confirm: func(name, prompt, yes, no string) (choseYes bool, err error) {
+						return p.Confirm(prompt, yes, no)
+					},
+					RequestValue: func(name, prompt string, secret bool) (string, error) {
+						return p.RequestValue(prompt, secret)
+					},
+					DisplayMessage: func(name, message string) error {
+						return p.DisplayMessage(message)
+					},
+					WaitTimer: func(name string) {
+					},
+				}
+
+				// even though using a symmetric recipient makes most sense here, the problem is that it
+				// would lead to re-asking for the PIN when the plugin controller calls Wrap().
+				// One idea might be to save the PIN in the recipient structure or create a custom recipient
+				// type and ask for the PIN here, but I'd like to avoid that.
+				_, fido2HmacRecipient, _, err := plugin.NewCredentials(libfido2.ES256, false, &ui, false)
+				if err != nil {
+					return nil, err
+				}
+
+				if fido2HmacRecipient == nil {
+					return nil, fmt.Errorf("failed to create fido2 hmac recipient")
+				}
+
+				fido2HmacRecipient.Plugin = p
+				return fido2HmacRecipient, nil
+			}
+
 			i, err := plugin.ParseFido2HmacIdentity(identity)
 			if err != nil {
 				return nil, err
