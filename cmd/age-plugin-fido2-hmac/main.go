@@ -168,8 +168,8 @@ func main() {
 		if err != nil {
 			os.Exit(1)
 		}
-		p.HandleIdentity(func(data []byte) (age.Identity, error) {
-			i, err := plugin.ParseFido2HmacIdentity(page.EncodeIdentity("fido2-hmac", data))
+		p.HandleIdentityEncoding(func(identity string) (age.Identity, error) {
+			i, err := plugin.ParseFido2HmacIdentity(identity)
 			if err != nil {
 				return nil, err
 			}
