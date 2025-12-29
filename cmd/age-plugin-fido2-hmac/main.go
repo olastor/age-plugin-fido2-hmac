@@ -126,8 +126,8 @@ func main() {
 		if err != nil {
 			os.Exit(1)
 		}
-		p.HandleRecipient(func(data []byte) (age.Recipient, error) {
-			r, err := plugin.ParseFido2HmacRecipient(page.EncodeRecipient("fido2-hmac", data))
+		p.HandleRecipientEncoding(func(recipient string) (age.Recipient, error) {
+			r, err := plugin.ParseFido2HmacRecipient(recipient)
 			if err != nil {
 				return nil, err
 			}
