@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	"bufio"
 	"crypto/rand"
 	"fmt"
 	"os"
@@ -9,33 +8,22 @@ import (
 	"time"
 
 	"filippo.io/age"
+	page "filippo.io/age/plugin"
 	"github.com/olastor/go-libfido2"
-	"golang.org/x/term"
 )
-
-func promptYesNo(s string) (bool, error) {
-	reader := bufio.NewReader(os.Stdin)
-
-	fmt.Fprintf(os.Stderr, "%s [y/n]: ", s)
-
-	response, err := reader.ReadString('\n')
-	if err != nil {
-		return false, err
-	}
-
-	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(response)), "y"), nil
-}
 
 func NewCredentials(
 	algorithm libfido2.CredentialType,
 	symmetric bool,
-	displayMessage func(message string) error,
-	requestValue func(prompt string, secret bool) (string, error),
-	confirm func(prompt, yes, no string) (choseYes bool, err error),
+	ui *page.ClientUI,
 ) (string, string, error) {
 	var device *libfido2.Device
 
-	err := displayMessage("Please insert your token now...")
+	displayMessage := func(message string) error {
+		return ui.DisplayMessage(PLUGIN_NAME, message)
+	}
+
+	err := displayMessage("Please insert your token now...\n")
 	if err != nil {
 		return "", "", err
 	}
@@ -52,13 +40,13 @@ func NewCredentials(
 
 	pin := ""
 	if hasPinSet {
-		pin, err = requestValue("Please enter your PIN: ", true)
+		pin, err = ui.RequestValue(PLUGIN_NAME, "Please enter your PIN:", true)
 		if err != nil {
 			return "", "", err
 		}
 	}
 
-	err = displayMessage("Please touch your token...")
+	err = displayMessage("Please touch your token...\n")
 	if err != nil {
 		return "", "", err
 	}
@@ -69,7 +57,7 @@ func NewCredentials(
 
 	requirePin := false
 	if hasPinSet {
-		requirePin, err = confirm("Do you want to require a PIN for decryption?", "yes", "no")
+		requirePin, err = ui.Confirm(PLUGIN_NAME, "Do you want to require a PIN for decryption?", "yes", "no")
 		if err != nil {
 			return "", "", err
 		}
@@ -90,6 +78,7 @@ func NewCredentials(
 			Salt:       nil,
 			CredId:     credId,
 			Device:     device,
+			UI:         ui,
 		}
 		recipient, err = identity.Recipient()
 		if err != nil {
@@ -107,6 +96,7 @@ func NewCredentials(
 			Salt:       salt,
 			CredId:     credId,
 			Device:     device,
+			UI:         ui,
 		}
 
 		_, err = identity.obtainSecretFromToken(pin)
@@ -126,8 +116,9 @@ func NewCredentials(
 		}
 	}
 
-	wantsSeparateIdentity, err := confirm(
-		"Are you fine with having a separate identity (better privacy)?",
+	wantsSeparateIdentity, err := ui.Confirm(
+		PLUGIN_NAME,
+		"Are you fine with having a separate identity (better privacy)?\n",
 		"yes",
 		"no",
 	)
@@ -146,37 +137,30 @@ func NewCredentials(
 	}
 }
 
+const defaultPrintfPrefix = "%s plugin: "
+
 func NewCredentialsCli(
 	algorithm libfido2.CredentialType,
 	symmetric bool,
 ) (string, string, error) {
-	displayMessage := func(message string) error {
-		fmt.Fprintf(os.Stderr, "[*] %s\n", message)
-		return nil
-	}
-	requestValue := func(message string, _ bool) (s string, err error) {
-		fmt.Fprint(os.Stderr, message)
-		secretBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
-		if err != nil {
-			return "", err
+	printf := func(format string, v ...any) {
+		if strings.HasPrefix(format, defaultPrintfPrefix) {
+			// try to use a nicer prefix if possible
+			newFormat := strings.Replace(format, defaultPrintfPrefix, "[*] ", 1)
+			fmt.Fprintf(os.Stderr, newFormat, v[1:]...)
+			return
 		}
 
-		return string(secretBytes), nil
+		fmt.Fprintf(os.Stderr, format, v...)
 	}
-	confirm := func(message, yes, no string) (choseYes bool, err error) {
-		answerYes, err := promptYesNo(fmt.Sprintf("[*] %s", message))
-		if err != nil {
-			return false, err
-		}
-
-		return answerYes, nil
+	warningf := func(format string, v ...any) {
+		fmt.Fprintf(os.Stderr, format, v...)
 	}
+	ui := page.NewTerminalUI(printf, warningf)
 
 	return NewCredentials(
 		algorithm,
 		symmetric,
-		displayMessage,
-		requestValue,
-		confirm,
+		ui,
 	)
 }

@@ -28,7 +28,10 @@ type Fido2HmacRecipient struct {
 	RequirePin     bool
 	Salt           []byte
 	CredId         []byte
-	Plugin         *page.Plugin
+
+	// one of these is required for user interactions, Plugin will be tried first
+	Plugin *page.Plugin
+	UI     *page.ClientUI
 
 	// only when the version is 1, the device must be set
 	Device *libfido2.Device
@@ -40,9 +43,13 @@ type Fido2HmacIdentity struct {
 	RequirePin bool
 	Salt       []byte
 	CredId     []byte
-	Plugin     *page.Plugin
-	Nonce      []byte
-	Device     *libfido2.Device
+
+	// one of these is required for user interactions, Plugin will be tried first
+	Plugin *page.Plugin
+	UI     *page.ClientUI
+
+	Nonce  []byte
+	Device *libfido2.Device
 }
 
 // data structure for stanza with parsed args

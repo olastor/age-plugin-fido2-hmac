@@ -39,13 +39,13 @@ cmp plaintext plaintext3
 
 -- tty-no --
 1234
-n
-n
+2
+2
 
 -- tty-yes --
 1234
-n
-y
+2
+1
 
 -- plaintext --
 this is the plaintext

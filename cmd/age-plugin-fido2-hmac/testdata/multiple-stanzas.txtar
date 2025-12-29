@@ -26,13 +26,13 @@ cmp plaintext plaintext2
 1234
 -- yes-pin-no-identity --
 1234
-y
-n
+1
+2
 
 -- no-pin-yes-identity --
 1234
-n
-y
+2
+1
 
 -- plaintext --
 this is the plaintext

@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"sort"
 	"strings"
@@ -15,7 +14,6 @@ import (
 	"github.com/olastor/age-plugin-fido2-hmac/internal/mlock"
 	"github.com/olastor/go-libfido2"
 	"golang.org/x/crypto/chacha20poly1305"
-	"golang.org/x/term"
 )
 
 func (i *Fido2HmacIdentity) X25519Identity() (*age.X25519Identity, error) {
@@ -62,24 +60,13 @@ func (i *Fido2HmacIdentity) obtainSecretFromToken(pin string) (string, error) {
 
 	if i.RequirePin && pin == "" {
 		msg := "Please enter your PIN:"
-		if i.Plugin != nil {
-			var err error
-			pin, err = i.RequestSecret(msg)
-			if err != nil {
-				return pin, err
-			}
-		} else {
-			fmt.Fprintf(os.Stderr, "[*] %s\n", msg)
-			pinBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
-			if err != nil {
-				return pin, err
-			}
-
-			pin = string(pinBytes)
+		pin, err := i.RequestSecret(msg)
+		if err != nil {
+			return pin, err
 		}
 	}
 
-	err := i.DisplayMessage("Please touch your token")
+	err := i.DisplayMessage("Please touch your token...")
 	if err != nil {
 		return pin, err
 	}
@@ -342,36 +329,27 @@ func (i *Fido2HmacIdentity) ClearSecret() {
 }
 
 func (i *Fido2HmacIdentity) DisplayMessage(msg string) error {
-	if i.Plugin != nil {
-		err := i.Plugin.DisplayMessage(msg)
-		if err != nil {
-			return err
-		}
-	} else {
-		fmt.Fprintf(os.Stderr, "[*] %s\n", msg)
+	if i.Plugin == nil && i.UI == nil {
+		return fmt.Errorf("no plugin or UI for user interactions specified")
 	}
 
-	return nil
+	if i.Plugin != nil {
+		return i.Plugin.DisplayMessage(msg)
+	}
+
+	return i.UI.DisplayMessage(PLUGIN_NAME, msg+"\n")
 }
 
 func (i *Fido2HmacIdentity) RequestSecret(msg string) (result string, err error) {
-	if i.Plugin != nil {
-		var err error
-		result, err = i.Plugin.RequestValue(msg, true)
-		if err != nil {
-			return "", err
-		}
-	} else {
-		fmt.Fprintf(os.Stderr, "[*] %s\n", msg)
-		resultBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
-		if err != nil {
-			return "", err
-		}
-
-		result = string(resultBytes)
+	if i.Plugin == nil && i.UI == nil {
+		return "", fmt.Errorf("no plugin or UI for user interactions specified")
 	}
 
-	return
+	if i.Plugin != nil {
+		return i.Plugin.RequestValue(msg, true)
+	}
+
+	return i.UI.RequestValue(PLUGIN_NAME, msg, true)
 }
 
 func (i *Fido2HmacIdentity) String() string {

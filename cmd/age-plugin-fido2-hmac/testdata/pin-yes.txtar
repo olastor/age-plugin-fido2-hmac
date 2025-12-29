@@ -63,13 +63,13 @@ cmp plaintext plaintext3
 1234
 -- yes-pin-no-identity --
 1234
-y
-n
+1
+2
 
 -- yes-pin-yes-identity --
 1234
-y
-y
+1
+1
 
 -- magic.txt --
 AGE-PLUGIN-FIDO2-HMAC-1VE5KGMEJ945X6CTRM2TF76
