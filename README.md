@@ -53,7 +53,7 @@ You can also use the following script for installation:
 
 ```bash
 cd "$(mktemp -d)"
-VERSION=v0.3.1 OS=linux ARCH=amd64; curl -L "https://github.com/olastor/age-plugin-fido2-hmac/releases/download/$VERSION/age-plugin-fido2-hmac-$VERSION-$OS-$ARCH.tar.gz" -o age-plugin-fido2-hmac.tar.gz
+VERSION=v0.4.0 OS=linux ARCH=amd64; curl -L "https://github.com/olastor/age-plugin-fido2-hmac/releases/download/$VERSION/age-plugin-fido2-hmac-$VERSION-$OS-$ARCH.tar.gz" -o age-plugin-fido2-hmac.tar.gz
 tar -xzf age-plugin-fido2-hmac.tar.gz
 mv age-plugin-fido2-hmac/age-plugin-fido2-hmac ~/.local/bin
 ```
