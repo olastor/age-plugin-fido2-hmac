@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
@@ -17,6 +18,7 @@ var Version string
 
 const USAGE = `Usage:
   age-plugin-fido2-hmac [-s] [-p] [-a ALG] -g
+  age-plugin-fido2-hmac -y [-i IDENTITY]
   age-plugin-fido2-hmac -m
 
 Options:
@@ -24,6 +26,9 @@ Options:
     -s, --symmetric       Use symmetric encryption and use a new salt for every encryption.
                           The token must be present for every operation.
     -p, --post-quantum    Use post-quantum MLKEM768-X25519 hybrid encryption instead of X25519.
+    -y                    Read an identity file and output the corresponding recipient.
+                          Reads from stdin if no -i flag is given.
+    -i                    Identity file to read (used with -y).
     -m, --magic-identity  Print the magic identity to use when no identity is required.
     -a, --algorithm       Choose a specific algorithm when creating the fido2 credential.
                           Can be one of 'es256', 'eddsa', or 'rs256'. Default: es256
@@ -47,7 +52,9 @@ func main() {
 	var (
 		pluginFlag          string
 		algorithmFlag       string
+		identityFileFlag    string
 		generateFlag        bool
+		convertFlag         bool
 		helpFlag            bool
 		versionFlag         bool
 		symmetricFlag       bool
@@ -74,6 +81,9 @@ func main() {
 
 	flag.BoolVar(&postQuantumFlag, "p", false, "")
 	flag.BoolVar(&postQuantumFlag, "post-quantum", false, "")
+
+	flag.BoolVar(&convertFlag, "y", false, "")
+	flag.StringVar(&identityFileFlag, "i", "", "")
 
 	flag.BoolVar(&versionFlag, "v", false, "")
 	flag.BoolVar(&versionFlag, "version", false, "")
@@ -140,6 +150,109 @@ func main() {
 		} else {
 			_, _ = fmt.Fprint(os.Stdout, "# for decryption, use `age -d -j fido2-hmac` without any identity file.\n")
 			_, _ = fmt.Fprintf(os.Stdout, "# public key: %s\n%s\n", recipientStr, identityStr)
+		}
+
+		os.Exit(0)
+	}
+
+	if convertFlag {
+		var input *os.File
+		if identityFileFlag != "" {
+			f, err := os.Open(identityFileFlag)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to open identity file: %s\n", err)
+				os.Exit(1)
+			}
+			defer f.Close()
+			input = f
+		} else {
+			input = os.Stdin
+		}
+
+		// scan for identity lines
+		var identityStr string
+		scanner := bufio.NewScanner(input)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if strings.HasPrefix(line, "#") || line == "" {
+				continue
+			}
+			if strings.HasPrefix(strings.ToUpper(line), "AGE-PLUGIN-FIDO2-HMAC-") {
+				identityStr = line
+				break
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to read identity: %s\n", err)
+			os.Exit(1)
+		}
+
+		if identityStr == "" {
+			fmt.Fprintf(os.Stderr, "No fido2-hmac identity found in input\n")
+			os.Exit(1)
+		}
+
+		identity, err := plugin.ParseFido2HmacIdentity(identityStr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to parse identity: %s\n", err)
+			os.Exit(1)
+		}
+
+		if identity.CredId == nil {
+			fmt.Fprintf(os.Stderr, "Cannot convert a dataless identity to a recipient\n")
+			os.Exit(1)
+		}
+
+		fmt.Fprintf(os.Stderr, "Please insert your token...\n")
+		device, err := plugin.FindDevice(50*time.Second, func(msg string) error {
+			fmt.Fprintf(os.Stderr, "%s\n", msg)
+			return nil
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to find device: %s\n", err)
+			os.Exit(1)
+		}
+		identity.Device = device
+
+		printf := func(format string, v ...any) {
+			fmt.Fprintf(os.Stderr, format, v...)
+		}
+		ui := page.NewTerminalUI(printf, printf)
+		identity.UI = ui
+
+		pin, err := identity.ObtainSecretFromToken("")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to obtain secret: %s\n", err)
+			os.Exit(1)
+		}
+		_ = pin
+
+		recipient, err := identity.Recipient()
+		identity.ClearSecret()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to derive recipient: %s\n", err)
+			os.Exit(1)
+		}
+
+		switch identity.Version {
+		case 1:
+			fmt.Println(recipient.String())
+		case 2:
+			x25519Recipient, err := recipient.X25519Recipient()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to encode recipient: %s\n", err)
+				os.Exit(1)
+			}
+			fmt.Println(x25519Recipient.String())
+		case 3:
+			hybridRecipient, err := recipient.HybridRecipient()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to encode recipient: %s\n", err)
+				os.Exit(1)
+			}
+			fmt.Println(hybridRecipient.String())
+		default:
+			fmt.Println(recipient.String())
 		}
 
 		os.Exit(0)

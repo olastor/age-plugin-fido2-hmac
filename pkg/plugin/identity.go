@@ -84,6 +84,12 @@ func (i *Fido2HmacIdentity) Recipient() (*Fido2HmacRecipient, error) {
 	}
 }
 
+// ObtainSecretFromToken obtains the HMAC secret from the FIDO2 token.
+// The pin can be passed if it's known already to avoid re-asking, but it's optional.
+func (i *Fido2HmacIdentity) ObtainSecretFromToken(pin string) (string, error) {
+	return i.obtainSecretFromToken(pin)
+}
+
 // the pin can be passed if it's known already to avoid re-asking, but it's optional
 func (i *Fido2HmacIdentity) obtainSecretFromToken(pin string) (string, error) {
 	if i.Device == nil {
