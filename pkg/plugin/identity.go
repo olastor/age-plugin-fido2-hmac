@@ -21,6 +21,11 @@ func (i *Fido2HmacIdentity) X25519Identity() (*age.X25519Identity, error) {
 	return age.ParseX25519Identity(strings.ToUpper(identityStr))
 }
 
+func (i *Fido2HmacIdentity) HybridIdentity() (*age.HybridIdentity, error) {
+	identityStr, _ := bech32.Encode("AGE-SECRET-KEY-PQ-", i.secretKey)
+	return age.ParseHybridIdentity(strings.ToUpper(identityStr))
+}
+
 func (i *Fido2HmacIdentity) Recipient() (*Fido2HmacRecipient, error) {
 	switch i.Version {
 	case 1:
@@ -45,6 +50,27 @@ func (i *Fido2HmacIdentity) Recipient() (*Fido2HmacRecipient, error) {
 
 		return &Fido2HmacRecipient{
 			Version:        2,
+			TheirPublicKey: theirPublicKey,
+			RequirePin:     i.RequirePin,
+			Salt:           i.Salt,
+			CredId:         i.CredId,
+			Device:         i.Device,
+			Plugin:         i.Plugin,
+			UI:             i.UI,
+		}, nil
+	case 3:
+		hybridIdentity, err := i.HybridIdentity()
+		if err != nil {
+			return nil, err
+		}
+
+		_, theirPublicKey, err := bech32.Decode(hybridIdentity.Recipient().String())
+		if err != nil {
+			return nil, err
+		}
+
+		return &Fido2HmacRecipient{
+			Version:        3,
 			TheirPublicKey: theirPublicKey,
 			RequirePin:     i.RequirePin,
 			Salt:           i.Salt,
@@ -165,6 +191,28 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 
 		// encrypting with an identity means we can use an X25519 stanza
 		return x25519Recipient.Wrap(fileKey)
+	case 3:
+		_, err := i.obtainSecretFromToken("")
+		if err != nil {
+			return nil, err
+		}
+
+		if i.secretKey == nil || len(i.secretKey) != 32 {
+			return nil, fmt.Errorf("incomplete identity, missing or invalid secret key")
+		}
+
+		recipient, err := i.Recipient()
+		if err != nil {
+			return nil, err
+		}
+
+		hybridRecipient, err := recipient.HybridRecipient()
+		if err != nil {
+			return nil, err
+		}
+
+		// encrypting with an identity means we can use an mlkem768x25519 stanza
+		return hybridRecipient.Wrap(fileKey)
 	default:
 		return nil, fmt.Errorf("unsupported recipient version %x", i.Version)
 	}
@@ -177,6 +225,7 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 
 	var pluginStanzas []*Fido2HmacStanza
 	var x25519Stanzas []*age.Stanza
+	var hybridStanzas []*age.Stanza
 
 	for _, stanza := range stanzas {
 		if stanza.Type == PLUGIN_NAME {
@@ -188,10 +237,12 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 			pluginStanzas = append(pluginStanzas, stanzaData)
 		} else if stanza.Type == "X25519" && i.Version == 2 {
 			x25519Stanzas = append(x25519Stanzas, stanza)
+		} else if stanza.Type == "mlkem768x25519" && i.Version == 3 {
+			hybridStanzas = append(hybridStanzas, stanza)
 		}
 	}
 
-	if len(pluginStanzas)+len(x25519Stanzas) == 0 {
+	if len(pluginStanzas)+len(x25519Stanzas)+len(hybridStanzas) == 0 {
 		// there were stanzas provided, but non of them are compatible
 		// with the plugin or the identity version
 		return nil, age.ErrIncorrectIdentity
@@ -239,6 +290,32 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 		}
 	}
 
+	// if the version is three and there is a cred id we expect to unwrap mlkem768x25519 stanzas
+	if i.Version == 3 && i.CredId != nil && len(hybridStanzas) > 0 {
+		if i.secretKey == nil {
+			pin, err = i.obtainSecretFromToken(pin)
+			if err != nil {
+				if errors.Is(err, libfido2.ErrNoCredentials) {
+					return nil, age.ErrIncorrectIdentity
+				}
+
+				return nil, err
+			}
+		}
+
+		hybridIdentity, err := i.HybridIdentity()
+		if err != nil {
+			return nil, err
+		}
+
+		fileKey, err := hybridIdentity.Unwrap(hybridStanzas)
+		i.ClearSecret()
+
+		if err == nil {
+			return fileKey, nil
+		}
+	}
+
 	for _, fidoStanza := range pluginStanzas {
 		if fidoStanza.CredId == nil && (i.CredId == nil || fidoStanza.Version != i.Version) {
 			// incompatible: cred id needs to exists in either stanza or identity
@@ -260,7 +337,7 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 			id.RequirePin = fidoStanza.RequirePin
 		}
 
-		if i.Version != 2 || i.secretKey == nil || !slices.Equal(i.CredId, id.CredId) {
+		if (i.Version != 2 && i.Version != 3) || i.secretKey == nil || !slices.Equal(i.CredId, id.CredId) {
 			if (i.RequirePin || fidoStanza.RequirePin) && pin == "" {
 				pin, err = i.RequestSecret("Please enter you PIN:")
 				if err != nil {
@@ -305,14 +382,31 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 				return nil, err
 			}
 
-			plaintext, err := x25519Identity.Unwrap([]*age.Stanza{&age.Stanza{
+			plaintext, err := x25519Identity.Unwrap([]*age.Stanza{{
 				Type: "X25519",
-				Args: []string{string(fidoStanza.X25519Share)},
+				Args: []string{fidoStanza.Share},
 				Body: fidoStanza.Body,
 			}})
 
 			if err != nil {
 				// TODO: differentiate error handling?
+				return nil, err
+			}
+
+			return plaintext, nil
+		case 3:
+			hybridIdentity, err := id.HybridIdentity()
+			if err != nil {
+				return nil, err
+			}
+
+			plaintext, err := hybridIdentity.Unwrap([]*age.Stanza{{
+				Type: "mlkem768x25519",
+				Args: []string{fidoStanza.Share},
+				Body: fidoStanza.Body,
+			}})
+
+			if err != nil {
 				return nil, err
 			}
 
@@ -379,7 +473,7 @@ func (i *Fido2HmacIdentity) String() string {
 		s, _ := bech32.Encode(IDENTITY_HRP, data)
 
 		return strings.ToUpper(s)
-	case 2:
+	case 2, 3:
 		data := slices.Concat(
 			version,
 			[]byte{requirePinByte},

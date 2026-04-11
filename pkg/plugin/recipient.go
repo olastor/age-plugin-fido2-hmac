@@ -14,6 +14,11 @@ func (r *Fido2HmacRecipient) X25519Recipient() (*age.X25519Recipient, error) {
 	return age.ParseX25519Recipient(recipientStr)
 }
 
+func (r *Fido2HmacRecipient) HybridRecipient() (*age.HybridRecipient, error) {
+	recipientStr, _ := bech32.Encode("age1pq", r.TheirPublicKey)
+	return age.ParseHybridRecipient(recipientStr)
+}
+
 func (r *Fido2HmacRecipient) String() string {
 	requirePinByte := byte(0)
 	if r.RequirePin {
@@ -33,7 +38,7 @@ func (r *Fido2HmacRecipient) String() string {
 
 		s, _ := bech32.Encode(RECIPIENT_HRP, data)
 		return s
-	case 2:
+	case 2, 3:
 		data := slices.Concat(
 			version,
 			r.TheirPublicKey,
@@ -108,6 +113,39 @@ func (r *Fido2HmacRecipient) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 			Type: PLUGIN_NAME,
 			Args: stanzaArgs,
 			Body: x25519Stanzas[0].Body,
+		}
+
+		return []*age.Stanza{stanza}, nil
+	case 3:
+		hybridRecipient, err := r.HybridRecipient()
+		if err != nil {
+			return nil, err
+		}
+
+		hybridStanzas, err := hybridRecipient.Wrap(fileKey)
+		if err != nil {
+			return nil, err
+		}
+
+		requirePinByte := byte(0)
+		if r.RequirePin {
+			requirePinByte = byte(1)
+		}
+
+		version := make([]byte, 2)
+		binary.BigEndian.PutUint16(version, uint16(STANZA_FORMAT_VERSION_PQ))
+
+		stanzaArgs := make([]string, 5)
+		stanzaArgs[0] = b64.EncodeToString(version)
+		stanzaArgs[1] = hybridStanzas[0].Args[0]
+		stanzaArgs[2] = b64.EncodeToString([]byte{requirePinByte})
+		stanzaArgs[3] = b64.EncodeToString(r.Salt)
+		stanzaArgs[4] = b64.EncodeToString(r.CredId)
+
+		stanza := &age.Stanza{
+			Type: PLUGIN_NAME,
+			Args: stanzaArgs,
+			Body: hybridStanzas[0].Body,
 		}
 
 		return []*age.Stanza{stanza}, nil

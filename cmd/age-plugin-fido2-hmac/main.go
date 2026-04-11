@@ -16,13 +16,14 @@ import (
 var Version string
 
 const USAGE = `Usage:
-  age-plugin-fido2-hmac [-s] [-a ALG] -g
+  age-plugin-fido2-hmac [-s] [-p] [-a ALG] -g
   age-plugin-fido2-hmac -m
 
 Options:
     -g, --generate        Generate new credentials interactively.
     -s, --symmetric       Use symmetric encryption and use a new salt for every encryption.
                           The token must be present for every operation.
+    -p, --post-quantum    Use post-quantum MLKEM768-X25519 hybrid encryption instead of X25519.
     -m, --magic-identity  Print the magic identity to use when no identity is required.
     -a, --algorithm       Choose a specific algorithm when creating the fido2 credential.
                           Can be one of 'es256', 'eddsa', or 'rs256'. Default: es256
@@ -50,6 +51,7 @@ func main() {
 		helpFlag            bool
 		versionFlag         bool
 		symmetricFlag       bool
+		postQuantumFlag     bool
 		deprecatedMagicFlag bool
 	)
 
@@ -69,6 +71,9 @@ func main() {
 
 	flag.BoolVar(&symmetricFlag, "s", false, "")
 	flag.BoolVar(&symmetricFlag, "symmetric", false, "")
+
+	flag.BoolVar(&postQuantumFlag, "p", false, "")
+	flag.BoolVar(&postQuantumFlag, "post-quantum", false, "")
 
 	flag.BoolVar(&versionFlag, "v", false, "")
 	flag.BoolVar(&versionFlag, "version", false, "")
@@ -105,7 +110,7 @@ func main() {
 			}
 		}
 
-		x25519Recipient, fido2HmacRecipient, fido2HmacIdentity, err := plugin.NewCredentialsCli(algorithm, symmetricFlag)
+		x25519Recipient, hybridRecipient, fido2HmacRecipient, fido2HmacIdentity, err := plugin.NewCredentialsCli(algorithm, symmetricFlag, postQuantumFlag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed: %s", err)
 			os.Exit(1)
@@ -120,6 +125,10 @@ func main() {
 
 		if x25519Recipient != nil {
 			recipientStr = x25519Recipient.String()
+		}
+
+		if hybridRecipient != nil {
+			recipientStr = hybridRecipient.String()
 		}
 
 		if fido2HmacIdentity != nil {
@@ -179,7 +188,7 @@ func main() {
 				// would lead to re-asking for the PIN when the plugin controller calls Wrap().
 				// One idea might be to save the PIN in the recipient structure or create a custom recipient
 				// type and ask for the PIN here, but I'd like to avoid that.
-				_, fido2HmacRecipient, _, err := plugin.NewCredentials(libfido2.ES256, false, &ui, false)
+				_, _, fido2HmacRecipient, _, err := plugin.NewCredentials(libfido2.ES256, false, false, &ui, false)
 				if err != nil {
 					return nil, err
 				}

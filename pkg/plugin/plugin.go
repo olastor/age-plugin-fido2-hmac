@@ -19,7 +19,8 @@ const (
 	RECIPIENT_HRP                = "age1" + PLUGIN_NAME
 	IDENTITY_HRP                 = "age-plugin-" + PLUGIN_NAME + "-"
 	RELYING_PARTY                = "age-encryption.org"
-	STANZA_FORMAT_VERSION uint16 = 2
+	STANZA_FORMAT_VERSION    uint16 = 2
+	STANZA_FORMAT_VERSION_PQ uint16 = 3
 )
 
 type Fido2HmacRecipient struct {
@@ -54,13 +55,13 @@ type Fido2HmacIdentity struct {
 
 // data structure for stanza with parsed args
 type Fido2HmacStanza struct {
-	Version     uint16
-	RequirePin  bool
-	Salt        []byte
-	CredId      []byte
-	X25519Share string
-	Nonce       []byte
-	Body        []byte
+	Version    uint16
+	RequirePin bool
+	Salt       []byte
+	CredId     []byte
+	Share      string // X25519 ephemeral share (V2) or MLKEM768X25519 enc (V3)
+	Nonce      []byte
+	Body       []byte
 }
 
 // Checks if an identity is a "data-less" identity. This method is backwards-compatible with older plugin versions that used a custom "magic" identity.
@@ -99,6 +100,16 @@ func ParseFido2HmacRecipient(recipient string) (*Fido2HmacRecipient, error) {
 			Salt:           data[35:67],
 			CredId:         data[67:],
 		}, nil
+	case 3:
+		// MLKEM768X25519 public key is 1216 bytes (1184 ML-KEM-768 + 32 X25519)
+		const pqPubKeySize = 1216
+		return &Fido2HmacRecipient{
+			Version:        3,
+			TheirPublicKey: data[2 : 2+pqPubKeySize],
+			RequirePin:     data[2+pqPubKeySize] == byte(1),
+			Salt:           data[2+pqPubKeySize+1 : 2+pqPubKeySize+1+32],
+			CredId:         data[2+pqPubKeySize+1+32:],
+		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported recipient version %x", format_version)
 	}
@@ -134,6 +145,14 @@ func ParseFido2HmacIdentity(identity string) (*Fido2HmacIdentity, error) {
 	case 2:
 		return &Fido2HmacIdentity{
 			Version:    2,
+			secretKey:  nil,
+			RequirePin: data[2] == byte(1),
+			Salt:       data[3:35],
+			CredId:     data[35:],
+		}, nil
+	case 3:
+		return &Fido2HmacIdentity{
+			Version:    3,
 			secretKey:  nil,
 			RequirePin: data[2] == byte(1),
 			Salt:       data[3:35],
@@ -182,8 +201,8 @@ func ParseFido2HmacStanza(stanza *age.Stanza) (*Fido2HmacStanza, error) {
 				return nil, fmt.Errorf("cred id in stanza is malformed")
 			}
 		}
-	case 2:
-		stanzaData.X25519Share = stanza.Args[1]
+	case 2, 3:
+		stanzaData.Share = stanza.Args[1]
 
 		requirePin, err := b64.DecodeString(stanza.Args[2])
 		if err != nil {
