@@ -120,6 +120,7 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 		if err != nil {
 			return nil, err
 		}
+		defer i.ClearSecret()
 
 		if i.secretKey == nil || len(i.secretKey) != 32 {
 			return nil, fmt.Errorf("incomplete identity, missing or invalid secret key")
@@ -148,6 +149,7 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 		if err != nil {
 			return nil, err
 		}
+		defer i.ClearSecret()
 
 		if i.secretKey == nil || len(i.secretKey) != 32 {
 			return nil, fmt.Errorf("incomplete identity, missing or invalid secret key")
@@ -213,6 +215,8 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 		if i.secretKey == nil {
 			pin, err = i.obtainSecretFromToken(pin)
 			if err != nil {
+				i.ClearSecret()
+
 				if errors.Is(err, libfido2.ErrNoCredentials) {
 					// since the cred ID is the same for all stanzas and it does not match the token,
 					// we can tell the controller to try the next identity
@@ -271,6 +275,8 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 			// needs to be called for every stanza because at least the salt changed
 			pin, err = id.obtainSecretFromToken(pin)
 			if err != nil {
+				id.ClearSecret()
+
 				if errors.Is(err, libfido2.ErrNoCredentials) {
 					// just because this one stanza didn't match the token doesn't mean
 					// any of the other stanzas left don't match. do not error here early!
@@ -280,6 +286,8 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 				return nil, err
 			}
 		}
+
+		defer id.ClearSecret()
 
 		switch id.Version {
 		case 1:
