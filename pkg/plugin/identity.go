@@ -38,19 +38,36 @@ func (i *Fido2HmacIdentity) Recipient() (*Fido2HmacRecipient, error) {
 			UI:         i.UI,
 		}, nil
 	case 2:
-		x25519Identity, err := i.X25519Identity()
-		if err != nil {
-			return nil, err
-		}
+		var nativePubKey []byte
+		var version uint16
 
-		_, NativePubKey, err := bech32.Decode(x25519Identity.Recipient().String())
-		if err != nil {
-			return nil, err
+		if i.PQ {
+			version = 3
+			hybridIdentity, err := i.HybridIdentity()
+			if err != nil {
+				return nil, err
+			}
+
+			_, nativePubKey, err = bech32.Decode(hybridIdentity.Recipient().String())
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			version = 2
+			x25519Identity, err := i.X25519Identity()
+			if err != nil {
+				return nil, err
+			}
+
+			_, nativePubKey, err = bech32.Decode(x25519Identity.Recipient().String())
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		return &Fido2HmacRecipient{
-			Version:      2,
-			NativePubKey: NativePubKey,
+			Version:      version,
+			NativePubKey: nativePubKey,
 			RequirePin:   i.RequirePin,
 			Salt:         i.Salt,
 			CredId:       i.CredId,
@@ -165,13 +182,22 @@ func (i *Fido2HmacIdentity) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 			return nil, err
 		}
 
-		x25519Recipient, err := recipient.X25519Recipient()
+		if !i.PQ {
+			x25519Recipient, err := recipient.X25519Recipient()
+			if err != nil {
+				return nil, err
+			}
+
+			// encrypting with an identity means we can use native stanzas
+			return x25519Recipient.Wrap(fileKey)
+		}
+
+		hybridRecipient, err := recipient.HybridRecipient()
 		if err != nil {
 			return nil, err
 		}
 
-		// encrypting with an identity means we can use an X25519 stanza
-		return x25519Recipient.Wrap(fileKey)
+		return hybridRecipient.Wrap(fileKey)
 	default:
 		return nil, fmt.Errorf("unsupported recipient version %x", i.Version)
 	}
@@ -184,6 +210,7 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 
 	var pluginStanzas []*Fido2HmacStanza
 	var x25519Stanzas []*age.Stanza
+	var hybridStanzas []*age.Stanza
 
 	for _, stanza := range stanzas {
 		if stanza.Type == PLUGIN_NAME {
@@ -195,10 +222,13 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 			pluginStanzas = append(pluginStanzas, stanzaData)
 		} else if stanza.Type == "X25519" && i.Version == 2 {
 			x25519Stanzas = append(x25519Stanzas, stanza)
+		} else if stanza.Type == "mlkem768x25519" && i.Version == 2 {
+			hybridStanzas = append(hybridStanzas, stanza)
 		}
 	}
 
-	if len(pluginStanzas)+len(x25519Stanzas) == 0 {
+	hasStanzas := len(pluginStanzas)+len(x25519Stanzas)+len(hybridStanzas) > 0
+	if !hasStanzas {
 		// there were stanzas provided, but non of them are compatible
 		// with the plugin or the identity version
 		return nil, age.ErrIncorrectIdentity
@@ -215,8 +245,11 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 
 	var err error
 
+	hasX25519Stanzas := len(x25519Stanzas) > 0
+	hasHybridStanzas := len(hybridStanzas) > 0
+
 	// if the version is two and there is a cred id we expect to unwrap x25519 stanzas
-	if i.Version == 2 && i.CredId != nil && len(x25519Stanzas) > 0 {
+	if i.Version == 2 && i.CredId != nil && (hasX25519Stanzas || hasHybridStanzas) {
 		if i.secretKey == nil {
 			pin, err = i.obtainSecretFromToken(pin)
 			if err != nil {
@@ -232,20 +265,37 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 			}
 		}
 
-		x25519Identity, err := i.X25519Identity()
-		if err != nil {
-			return nil, err
+		if hasX25519Stanzas {
+			x25519Identity, err := i.X25519Identity()
+			if err != nil {
+				return nil, err
+			}
+
+			fileKey, err := x25519Identity.Unwrap(x25519Stanzas)
+			if err == nil {
+				// do not return an error here because it might be that there is
+				// still another plugin stanza that does not match the identity,
+				// but can decrypt with the fido2 token "standalone"
+				return fileKey, nil
+			}
 		}
 
-		fileKey, err := x25519Identity.Unwrap(x25519Stanzas)
+		if hasHybridStanzas {
+			hybridIdentity, err := i.HybridIdentity()
+			if err != nil {
+				return nil, err
+			}
+
+			fileKey, err := hybridIdentity.Unwrap(hybridStanzas)
+			if err == nil {
+				// do not return an error here because it might be that there is
+				// still another plugin stanza that does not match the identity,
+				// but can decrypt with the fido2 token "standalone"
+				return fileKey, nil
+			}
+		}
+
 		i.ClearSecret()
-
-		if err == nil {
-			// do not return an error here because it might be that there is
-			// still another plugin stanza that does not match the identity,
-			// but can decrypt with the fido2 token "standalone"
-			return fileKey, nil
-		}
 	}
 
 	for _, fidoStanza := range pluginStanzas {
@@ -263,6 +313,10 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 		id := *i
 		id.Salt = fidoStanza.Salt
 		id.Nonce = fidoStanza.Nonce
+
+		// with X25519, we except exactly 32 bytes (43 bytes in b64 encoding)
+		id.PQ = len(fidoStanza.NativeShare) != 43
+
 		if i.CredId == nil {
 			id.Version = fidoStanza.Version
 			id.CredId = fidoStanza.CredId
@@ -313,23 +367,31 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 
 			return plaintext, nil
 		case 2:
-			x25519Identity, err := id.X25519Identity()
+			if !id.PQ {
+				x25519Identity, err := id.X25519Identity()
+				if err != nil {
+					return nil, err
+				}
+
+				return x25519Identity.Unwrap([]*age.Stanza{&age.Stanza{
+					Type: "X25519",
+					Args: []string{string(fidoStanza.NativeShare)},
+					Body: fidoStanza.Body,
+				}})
+			}
+
+			hybridIdentity, err := id.HybridIdentity()
 			if err != nil {
 				return nil, err
 			}
 
-			plaintext, err := x25519Identity.Unwrap([]*age.Stanza{&age.Stanza{
-				Type: "X25519",
+			// TODO: double check if error handling needs to be customized here
+
+			return hybridIdentity.Unwrap([]*age.Stanza{&age.Stanza{
+				Type: "mlkem768x25519",
 				Args: []string{string(fidoStanza.NativeShare)},
 				Body: fidoStanza.Body,
 			}})
-
-			if err != nil {
-				// TODO: differentiate error handling?
-				return nil, err
-			}
-
-			return plaintext, nil
 		default:
 			return nil, fmt.Errorf("unsupported identity version %x", i.Version)
 		}

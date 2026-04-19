@@ -44,6 +44,9 @@ type Fido2HmacIdentity struct {
 	Salt       []byte
 	CredId     []byte
 
+	// flag whether to or not to use MLKEM768X25519 instead of X25519
+	PQ bool
+
 	// one of these is required for user interactions, Plugin will be tried first
 	Plugin *page.Plugin
 	UI     *page.ClientUI
@@ -58,7 +61,7 @@ type Fido2HmacStanza struct {
 	RequirePin  bool
 	Salt        []byte
 	CredId      []byte
-	NativeShare string
+	NativeShare string // X25519 ephemeral share or MLKEM768X25519 enc
 	Nonce       []byte
 	Body        []byte
 }
@@ -98,6 +101,16 @@ func ParseFido2HmacRecipient(recipient string) (*Fido2HmacRecipient, error) {
 			RequirePin:   data[34] == byte(1),
 			Salt:         data[35:67],
 			CredId:       data[67:],
+		}, nil
+	case 3:
+		// MLKEM768X25519 public key is 1216 bytes (1184 ML-KEM-768 + 32 X25519)
+		const pqPubKeySize = 1216
+		return &Fido2HmacRecipient{
+			Version:      3,
+			NativePubKey: data[2 : 2+pqPubKeySize],
+			RequirePin:   data[2+pqPubKeySize] == byte(1),
+			Salt:         data[2+pqPubKeySize+1 : 2+pqPubKeySize+1+32],
+			CredId:       data[2+pqPubKeySize+1+32:],
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported recipient version %x", format_version)

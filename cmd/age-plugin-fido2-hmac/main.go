@@ -105,33 +105,34 @@ func main() {
 			}
 		}
 
-		x25519Recipient, fido2HmacRecipient, fido2HmacIdentity, err := plugin.NewCredentialsCli(algorithm, symmetricFlag)
+		result, err := plugin.NewCredentialsCli(algorithm, symmetricFlag, false)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed: %s", err)
 			os.Exit(1)
 		}
 
-		recipientStr := ""
-		identityStr := ""
+		message := fmt.Sprintf("# created: %s\n", time.Now().Format(time.RFC3339))
 
-		if fido2HmacRecipient != nil {
-			recipientStr = fido2HmacRecipient.String()
+		if result.Fido2HmacRecipient != nil {
+			message += fmt.Sprintf("# public key: %s\n", result.Fido2HmacRecipient)
 		}
 
-		if x25519Recipient != nil {
-			recipientStr = x25519Recipient.String()
+		if result.X25519Recipient != nil {
+			message += fmt.Sprintf("# public key: %s\n", result.X25519Recipient)
 		}
 
-		if fido2HmacIdentity != nil {
-			identityStr = fido2HmacIdentity.String()
+		if result.HybridRecipient != nil {
+			message += fmt.Sprintf("# public key (pq safe): %s\n", result.HybridRecipient)
 		}
 
-		if identityStr != "" {
-			_, _ = fmt.Fprintf(os.Stdout, "# public key: %s\n%s\n", recipientStr, identityStr)
+		if result.Fido2HmacIdentity != nil {
+			message += result.Fido2HmacIdentity.String()
+			message += "\n"
 		} else {
-			_, _ = fmt.Fprint(os.Stdout, "# for decryption, use `age -d -j fido2-hmac` without any identity file.\n")
-			_, _ = fmt.Fprintf(os.Stdout, "# public key: %s\n%s\n", recipientStr, identityStr)
+			message += "# for decryption, use `age -d -j fido2-hmac` without any identity file.\n"
 		}
+
+		_, _ = fmt.Fprint(os.Stdout, message)
 
 		os.Exit(0)
 	}
@@ -179,17 +180,17 @@ func main() {
 				// would lead to re-asking for the PIN when the plugin controller calls Wrap().
 				// One idea might be to save the PIN in the recipient structure or create a custom recipient
 				// type and ask for the PIN here, but I'd like to avoid that.
-				_, fido2HmacRecipient, _, err := plugin.NewCredentials(libfido2.ES256, false, &ui, false)
+				result, err := plugin.NewCredentials(libfido2.ES256, false, false, &ui, false)
 				if err != nil {
 					return nil, err
 				}
 
-				if fido2HmacRecipient == nil {
+				if result.Fido2HmacRecipient == nil {
 					return nil, fmt.Errorf("failed to create fido2 hmac recipient")
 				}
 
-				fido2HmacRecipient.Plugin = p
-				return fido2HmacRecipient, nil
+				result.Fido2HmacRecipient.Plugin = p
+				return result.Fido2HmacRecipient, nil
 			}
 
 			i, err := plugin.ParseFido2HmacIdentity(identity)

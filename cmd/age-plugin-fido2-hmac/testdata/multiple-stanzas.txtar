@@ -11,7 +11,7 @@ ttyin -stdin no-pin-yes-identity
 exec age-plugin-fido2-hmac -g
 cp stdout identity2.txt
 
-exec bash -c 'cat identity0.txt identity1.txt identity2.txt | grep -oP "age1.*" > recipients.txt'
+exec bash -c 'cat identity0.txt identity1.txt identity2.txt | grep -vF 'age1pq' | grep -oP "age1.*" > recipients.txt'
 
 exec age -R recipients.txt -o ciphertext plaintext
 

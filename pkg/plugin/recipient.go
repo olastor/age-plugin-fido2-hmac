@@ -14,6 +14,11 @@ func (r *Fido2HmacRecipient) X25519Recipient() (*age.X25519Recipient, error) {
 	return age.ParseX25519Recipient(recipientStr)
 }
 
+func (r *Fido2HmacRecipient) HybridRecipient() (*age.HybridRecipient, error) {
+	recipientStr, _ := bech32.Encode("age1pq", r.NativePubKey)
+	return age.ParseHybridRecipient(recipientStr)
+}
+
 func (r *Fido2HmacRecipient) String() string {
 	requirePinByte := byte(0)
 	if r.RequirePin {
@@ -33,7 +38,7 @@ func (r *Fido2HmacRecipient) String() string {
 
 		s, _ := bech32.Encode(RECIPIENT_HRP, data)
 		return s
-	case 2:
+	case 2, 3:
 		data := slices.Concat(
 			version,
 			r.NativePubKey,
@@ -78,15 +83,28 @@ func (r *Fido2HmacRecipient) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 		)
 
 		return stanzas, nil
-	case 2:
-		x25519Recipient, err := r.X25519Recipient()
-		if err != nil {
-			return nil, err
-		}
+	case 2, 3:
+		var nativeStanzas []*age.Stanza
+		if r.Version == 2 {
+			x25519Recipient, err := r.X25519Recipient()
+			if err != nil {
+				return nil, err
+			}
 
-		x25519Stanzas, err := x25519Recipient.Wrap(fileKey)
-		if err != nil {
-			return nil, err
+			nativeStanzas, err = x25519Recipient.Wrap(fileKey)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			hybridRecipient, err := r.HybridRecipient()
+			if err != nil {
+				return nil, err
+			}
+
+			nativeStanzas, err = hybridRecipient.Wrap(fileKey)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		requirePinByte := byte(0)
@@ -99,7 +117,7 @@ func (r *Fido2HmacRecipient) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 
 		stanzaArgs := make([]string, 5)
 		stanzaArgs[0] = b64.EncodeToString(version)
-		stanzaArgs[1] = x25519Stanzas[0].Args[0]
+		stanzaArgs[1] = nativeStanzas[0].Args[0]
 		stanzaArgs[2] = b64.EncodeToString([]byte{requirePinByte})
 		stanzaArgs[3] = b64.EncodeToString(r.Salt)
 		stanzaArgs[4] = b64.EncodeToString(r.CredId)
@@ -107,7 +125,7 @@ func (r *Fido2HmacRecipient) Wrap(fileKey []byte) ([]*age.Stanza, error) {
 		stanza := &age.Stanza{
 			Type: PLUGIN_NAME,
 			Args: stanzaArgs,
-			Body: x25519Stanzas[0].Body,
+			Body: nativeStanzas[0].Body,
 		}
 
 		return []*age.Stanza{stanza}, nil
