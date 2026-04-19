@@ -1,10 +1,13 @@
 package plugin
 
 import (
+	"bufio"
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"strings"
+	"unicode/utf8"
 
 	"filippo.io/age"
 	page "filippo.io/age/plugin"
@@ -219,4 +222,38 @@ func ParseFido2HmacStanza(stanza *age.Stanza) (*Fido2HmacStanza, error) {
 	}
 
 	return stanzaData, nil
+}
+
+// Parses a file with multiple identites.
+// based on https://github.com/FiloSottile/age/blob/b8564adb6d58329b8a3e267360ca2b0abc4efe1d/parse.go#L74
+func ParseIdentities(f io.Reader) ([]*Fido2HmacIdentity, error) {
+	const privateKeySizeLimit = 1 << 24 // 16 MiB
+	var ids []*Fido2HmacIdentity
+	scanner := bufio.NewScanner(io.LimitReader(f, privateKeySizeLimit))
+	var n int
+	for scanner.Scan() {
+		n++
+		line := scanner.Text()
+		if strings.HasPrefix(line, "#") || line == "" {
+			continue
+		}
+		if !strings.HasPrefix(line, "AGE-PLUGIN-FIDO2-HMAC-") {
+			return nil, fmt.Errorf("error at line %d: unknown type for this identity: %q", n, line)
+		}
+		if !utf8.ValidString(line) {
+			return nil, fmt.Errorf("identities file is not valid UTF-8")
+		}
+		i, err := ParseFido2HmacIdentity(line)
+		if err != nil {
+			return nil, fmt.Errorf("error at line %d: %v", n, err)
+		}
+		ids = append(ids, i)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read identities file: %v", err)
+	}
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("no identities found")
+	}
+	return ids, nil
 }
