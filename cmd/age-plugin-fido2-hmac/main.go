@@ -40,7 +40,11 @@ Environment Variables:
 
   FIDO2_TOKEN     This variable can be used to force a specific device path. Please note that
                   /dev/hid* paths are ephemeral and fido2 tokens (mostly) have no identifier.
-                  Therefore, it's in general not recommended to use this environment variable.`
+                  Therefore, it's in general not recommended to use this environment variable.
+
+  FIDO2_HMAC_PQ   Set to '1', 'true', or 'yes' to force post-quantum encryption (MLKEM768X25519)
+                  when using an identity as recipient. Set to '0', 'false', or 'no' to disable.
+                  If not set, you will be prompted interactively.`
 
 func main() {
 	var (
@@ -204,6 +208,26 @@ func main() {
 			}
 
 			i.Plugin = p
+
+			// determine PQ preference: env var overrides interactive prompt
+			if i.Version == 2 {
+				usePQ := false
+				envPQ := os.Getenv("FIDO2_HMAC_PQ")
+				switch strings.ToLower(envPQ) {
+				case "1", "true", "yes":
+					usePQ = true
+				case "0", "false", "no":
+					usePQ = false
+				default:
+					// env not set or invalid value, ask interactively
+					var err error
+					usePQ, err = p.Confirm("Use post-quantum encryption (MLKEM768X25519)?", "yes", "no")
+					if err != nil {
+						return nil, err
+					}
+				}
+				i.PQ = usePQ
+			}
 
 			return i, nil
 		})
