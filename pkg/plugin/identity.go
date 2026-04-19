@@ -21,6 +21,11 @@ func (i *Fido2HmacIdentity) X25519Identity() (*age.X25519Identity, error) {
 	return age.ParseX25519Identity(strings.ToUpper(identityStr))
 }
 
+func (i *Fido2HmacIdentity) HybridIdentity() (*age.HybridIdentity, error) {
+	identityStr, _ := bech32.Encode("AGE-SECRET-KEY-PQ-", i.secretKey)
+	return age.ParseHybridIdentity(strings.ToUpper(identityStr))
+}
+
 func (i *Fido2HmacIdentity) Recipient() (*Fido2HmacRecipient, error) {
 	switch i.Version {
 	case 1:
