@@ -248,6 +248,22 @@ func main() {
 			return r, nil
 		})
 		p.HandleIdentityEncodingAsRecipient(func(identity string) (age.Recipient, error) {
+			usePQ := false
+			envPQ := os.Getenv("FIDO2_HMAC_PQ")
+			switch strings.ToLower(envPQ) {
+			case "1", "true", "yes":
+				usePQ = true
+			case "0", "false", "no":
+				usePQ = false
+			default:
+				// env not set or invalid value, ask interactively
+				var err error
+				usePQ, err = p.Confirm("Use post-quantum encryption (MLKEM768X25519)?", "yes", "no")
+				if err != nil {
+					return nil, err
+				}
+			}
+
 			if plugin.IsDatalessIdentity(identity) {
 				// generate a new recipient "on the fly"
 
@@ -269,7 +285,7 @@ func main() {
 				// would lead to re-asking for the PIN when the plugin controller calls Wrap().
 				// One idea might be to save the PIN in the recipient structure or create a custom recipient
 				// type and ask for the PIN here, but I'd like to avoid that.
-				result, err := plugin.NewCredentials(libfido2.ES256, false, false, &ui, false)
+				result, err := plugin.NewCredentials(libfido2.ES256, false, usePQ, &ui, false)
 				if err != nil {
 					return nil, err
 				}
@@ -293,26 +309,7 @@ func main() {
 			}
 
 			i.Plugin = p
-
-			// determine PQ preference: env var overrides interactive prompt
-			if i.Version == 2 {
-				usePQ := false
-				envPQ := os.Getenv("FIDO2_HMAC_PQ")
-				switch strings.ToLower(envPQ) {
-				case "1", "true", "yes":
-					usePQ = true
-				case "0", "false", "no":
-					usePQ = false
-				default:
-					// env not set or invalid value, ask interactively
-					var err error
-					usePQ, err = p.Confirm("Use post-quantum encryption (MLKEM768X25519)?", "yes", "no")
-					if err != nil {
-						return nil, err
-					}
-				}
-				i.PQ = usePQ
-			}
+			i.PQ = usePQ
 
 			return i, nil
 		})
