@@ -38,14 +38,14 @@ func (i *Fido2HmacIdentity) Recipient() (*Fido2HmacRecipient, error) {
 			return nil, err
 		}
 
-		_, theirPublicKey, err := bech32.Decode(x25519Identity.Recipient().String())
+		_, NativePubKey, err := bech32.Decode(x25519Identity.Recipient().String())
 		if err != nil {
 			return nil, err
 		}
 
 		return &Fido2HmacRecipient{
 			Version:        2,
-			TheirPublicKey: theirPublicKey,
+			NativePubKey: NativePubKey,
 			RequirePin:     i.RequirePin,
 			Salt:           i.Salt,
 			CredId:         i.CredId,
@@ -315,7 +315,7 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 
 			plaintext, err := x25519Identity.Unwrap([]*age.Stanza{&age.Stanza{
 				Type: "X25519",
-				Args: []string{string(fidoStanza.X25519Share)},
+				Args: []string{string(fidoStanza.NativeShare)},
 				Body: fidoStanza.Body,
 			}})
 

@@ -10,7 +10,7 @@ import (
 )
 
 func (r *Fido2HmacRecipient) X25519Recipient() (*age.X25519Recipient, error) {
-	recipientStr, _ := bech32.Encode("age", r.TheirPublicKey)
+	recipientStr, _ := bech32.Encode("age", r.NativePubKey)
 	return age.ParseX25519Recipient(recipientStr)
 }
 
@@ -36,7 +36,7 @@ func (r *Fido2HmacRecipient) String() string {
 	case 2:
 		data := slices.Concat(
 			version,
-			r.TheirPublicKey,
+			r.NativePubKey,
 			[]byte{requirePinByte},
 			r.Salt,
 			r.CredId,

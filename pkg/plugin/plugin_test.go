@@ -8,8 +8,8 @@ import (
 
 func TestRecipientFormat(t *testing.T) {
 	for _, requirePin := range []bool{true, false} {
-		theirPublicKey := make([]byte, 32)
-		if _, err := rand.Read(theirPublicKey); err != nil {
+		NativePubKey := make([]byte, 32)
+		if _, err := rand.Read(NativePubKey); err != nil {
 			t.Error(err)
 		}
 
@@ -25,7 +25,7 @@ func TestRecipientFormat(t *testing.T) {
 
 		rec := &Fido2HmacRecipient{
 			Version:        2,
-			TheirPublicKey: theirPublicKey,
+			NativePubKey: NativePubKey,
 			Salt:           salt,
 			CredId:         credId,
 			RequirePin:     requirePin,
@@ -36,7 +36,7 @@ func TestRecipientFormat(t *testing.T) {
 			t.Error(err)
 		}
 
-		if !reflect.DeepEqual(rec.TheirPublicKey, rec2.TheirPublicKey) {
+		if !reflect.DeepEqual(rec.NativePubKey, rec2.NativePubKey) {
 			t.Error("Public key changed")
 		}
 		if !reflect.DeepEqual(rec.Salt, rec2.Salt) {

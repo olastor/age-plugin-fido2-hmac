@@ -23,11 +23,11 @@ const (
 )
 
 type Fido2HmacRecipient struct {
-	Version        uint16
-	TheirPublicKey []byte
-	RequirePin     bool
-	Salt           []byte
-	CredId         []byte
+	Version      uint16
+	NativePubKey []byte
+	RequirePin   bool
+	Salt         []byte
+	CredId       []byte
 
 	// one of these is required for user interactions, Plugin will be tried first
 	Plugin *page.Plugin
@@ -58,7 +58,7 @@ type Fido2HmacStanza struct {
 	RequirePin  bool
 	Salt        []byte
 	CredId      []byte
-	X25519Share string
+	NativeShare string
 	Nonce       []byte
 	Body        []byte
 }
@@ -86,7 +86,7 @@ func ParseFido2HmacRecipient(recipient string) (*Fido2HmacRecipient, error) {
 	case 1:
 		return &Fido2HmacRecipient{
 			Version:        1,
-			TheirPublicKey: nil,
+			NativePubKey: nil,
 			RequirePin:     data[2] == byte(1),
 			Salt:           nil,
 			CredId:         data[3:],
@@ -94,7 +94,7 @@ func ParseFido2HmacRecipient(recipient string) (*Fido2HmacRecipient, error) {
 	case 2:
 		return &Fido2HmacRecipient{
 			Version:        2,
-			TheirPublicKey: data[2:34],
+			NativePubKey: data[2:34],
 			RequirePin:     data[34] == byte(1),
 			Salt:           data[35:67],
 			CredId:         data[67:],
@@ -183,7 +183,7 @@ func ParseFido2HmacStanza(stanza *age.Stanza) (*Fido2HmacStanza, error) {
 			}
 		}
 	case 2:
-		stanzaData.X25519Share = stanza.Args[1]
+		stanzaData.NativeShare = stanza.Args[1]
 
 		requirePin, err := b64.DecodeString(stanza.Args[2])
 		if err != nil {
