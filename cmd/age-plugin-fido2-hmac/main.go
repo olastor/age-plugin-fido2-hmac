@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -15,14 +16,83 @@ import (
 
 var Version string
 
+// ConvertIdentitiesToRecipients reads identities from input and prints recipients to stdout.
+// If path is "-" or empty, reads from stdin. If usePQ is true, v2 identities use hybrid encryption.
+func ConvertIdentitiesToRecipients(path string, usePQ bool) error {
+	var input io.Reader = os.Stdin
+	if path != "" && path != "-" {
+		f, err := os.Open(path)
+		if err != nil {
+			return fmt.Errorf("failed to open identity file: %w", err)
+		}
+		defer f.Close()
+		input = f
+	}
+
+	identities, err := plugin.ParseIdentities(input)
+	if err != nil {
+		return fmt.Errorf("failed to parse identities: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Please insert your token...\n")
+	device, err := plugin.FindDevice(50*time.Second, func(msg string) error {
+		fmt.Fprintf(os.Stderr, "%s\n", msg)
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to find device: %s\n", err)
+	}
+	printf := func(format string, v ...any) {
+		fmt.Fprintf(os.Stderr, format, v...)
+	}
+	ui := page.NewTerminalUI(printf, printf)
+
+	pin := ""
+
+	for _, i := range identities {
+		if i.Version < 3 && i.CredId == nil {
+			return fmt.Errorf("data-less identity cannot be converted to recipient")
+		}
+
+		// for v2 identities, allow PQ override via flag
+		if i.Version == 2 {
+			i.PQ = usePQ
+		}
+
+		i.UI = ui
+		i.Device = device
+
+		if i.RequirePin && pin == "" {
+			pin, err = i.RequestSecret("Please enter you PIN:")
+			if err != nil {
+				return err
+			}
+		}
+
+		i.LoadSecret(pin)
+
+		recipient, err := i.Recipient()
+		if err != nil {
+			return fmt.Errorf("failed to derive recipient: %w", err)
+		}
+
+		fmt.Println(recipient.String())
+	}
+	return nil
+}
+
 const USAGE = `Usage:
-  age-plugin-fido2-hmac [-s] [-a ALG] -g
+  age-plugin-fido2-hmac [-s] [-a ALG] [-pq] -g
+  age-plugin-fido2-hmac -y [FILE]
   age-plugin-fido2-hmac -m
 
 Options:
     -g, --generate        Generate new credentials interactively.
     -s, --symmetric       Use symmetric encryption and use a new salt for every encryption.
                           The token must be present for every operation.
+    -pq, --post-quantum   Use post-quantum MLKEM768-X25519 hybrid encryption instead of X25519.
+    -y [FILE]             Read an identity file and output the corresponding recipient(s).
+                          If FILE is "-" or not provided, reads from stdin.
     -m, --magic-identity  Print the magic identity to use when no identity is required.
     -a, --algorithm       Choose a specific algorithm when creating the fido2 credential.
                           Can be one of 'es256', 'eddsa', or 'rs256'. Default: es256
@@ -54,6 +124,8 @@ func main() {
 		helpFlag            bool
 		versionFlag         bool
 		symmetricFlag       bool
+		postQuantumFlag     bool
+		identityToRecipient string
 		deprecatedMagicFlag bool
 	)
 
@@ -73,6 +145,11 @@ func main() {
 
 	flag.BoolVar(&symmetricFlag, "s", false, "")
 	flag.BoolVar(&symmetricFlag, "symmetric", false, "")
+
+	flag.BoolVar(&postQuantumFlag, "pq", false, "")
+	flag.BoolVar(&postQuantumFlag, "post-quantum", false, "")
+
+	flag.StringVar(&identityToRecipient, "y", "", "")
 
 	flag.BoolVar(&versionFlag, "v", false, "")
 	flag.BoolVar(&versionFlag, "version", false, "")
@@ -109,7 +186,7 @@ func main() {
 			}
 		}
 
-		result, err := plugin.NewCredentialsCli(algorithm, symmetricFlag, false)
+		result, err := plugin.NewCredentialsCli(algorithm, symmetricFlag, postQuantumFlag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed: %s", err)
 			os.Exit(1)
@@ -138,6 +215,14 @@ func main() {
 
 		_, _ = fmt.Fprint(os.Stdout, message)
 
+		os.Exit(0)
+	}
+
+	if identityToRecipient != "" {
+		if err := ConvertIdentitiesToRecipients(identityToRecipient, postQuantumFlag); err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 

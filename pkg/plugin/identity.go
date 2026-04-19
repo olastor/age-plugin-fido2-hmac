@@ -80,7 +80,46 @@ func (i *Fido2HmacIdentity) Recipient() (*Fido2HmacRecipient, error) {
 	}
 }
 
-// the pin can be passed if it's known already to avoid re-asking, but it's optional
+// Perform the HMAC operation to load the secret into memory (requires user presence).
+// If the identity has `RequirePin` set to `true`, the device pin must be provided.
+// Returns silently without error if secret is already loaded.
+func (i *Fido2HmacIdentity) LoadSecret(pin string) error {
+	if i.secretKey != nil {
+		// already loaded
+		return nil
+	}
+
+	if i.RequirePin && pin == "" {
+		return fmt.Errorf("pin required for this identity")
+	}
+
+	err := i.DisplayMessage("Please touch your token...")
+	if err != nil {
+		return err
+	}
+
+	unlockPin := ""
+	if i.RequirePin {
+		unlockPin = pin
+	}
+
+	i.secretKey, err = getHmacSecret(i.Device, i.CredId, i.Salt, unlockPin)
+	if err != nil {
+		return err
+	}
+
+	err = mlock.Mlock(i.secretKey)
+	if err != nil {
+		err = i.DisplayMessage(fmt.Sprintf("Warning: Failed to call mlock: %s", err))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// internal method that returns the pin to avoid re-asking it
 func (i *Fido2HmacIdentity) obtainSecretFromToken(pin string) (string, error) {
 	if i.Device == nil {
 		return pin, fmt.Errorf("device not specified, cannot obtain secret")
@@ -95,27 +134,9 @@ func (i *Fido2HmacIdentity) obtainSecretFromToken(pin string) (string, error) {
 		}
 	}
 
-	err := i.DisplayMessage("Please touch your token...")
+	err := i.LoadSecret(pin)
 	if err != nil {
 		return pin, err
-	}
-
-	if i.RequirePin {
-		i.secretKey, err = getHmacSecret(i.Device, i.CredId, i.Salt, pin)
-	} else {
-		i.secretKey, err = getHmacSecret(i.Device, i.CredId, i.Salt, "")
-	}
-
-	if err != nil {
-		return pin, err
-	}
-
-	err = mlock.Mlock(i.secretKey)
-	if err != nil {
-		err = i.DisplayMessage(fmt.Sprintf("Warning: Failed to call mlock: %s", err))
-		if err != nil {
-			return pin, err
-		}
 	}
 
 	return pin, nil
