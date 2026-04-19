@@ -25,7 +25,7 @@ func ConvertIdentitiesToRecipients(path string, usePQ bool) error {
 		if err != nil {
 			return fmt.Errorf("failed to open identity file: %w", err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		input = f
 	}
 
@@ -40,7 +40,7 @@ func ConvertIdentitiesToRecipients(path string, usePQ bool) error {
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("failed to find device: %s\n", err)
+		return fmt.Errorf("failed to find device: %s", err)
 	}
 	printf := func(format string, v ...any) {
 		fmt.Fprintf(os.Stderr, format, v...)
@@ -69,7 +69,9 @@ func ConvertIdentitiesToRecipients(path string, usePQ bool) error {
 			}
 		}
 
-		i.LoadSecret(pin)
+		if err := i.LoadSecret(pin); err != nil {
+			return err
+		}
 
 		recipient, err := i.Recipient()
 		if err != nil {
