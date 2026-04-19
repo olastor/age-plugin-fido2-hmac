@@ -85,19 +85,19 @@ func ParseFido2HmacRecipient(recipient string) (*Fido2HmacRecipient, error) {
 	switch format_version {
 	case 1:
 		return &Fido2HmacRecipient{
-			Version:        1,
+			Version:      1,
 			NativePubKey: nil,
-			RequirePin:     data[2] == byte(1),
-			Salt:           nil,
-			CredId:         data[3:],
+			RequirePin:   data[2] == byte(1),
+			Salt:         nil,
+			CredId:       data[3:],
 		}, nil
 	case 2:
 		return &Fido2HmacRecipient{
-			Version:        2,
+			Version:      2,
 			NativePubKey: data[2:34],
-			RequirePin:     data[34] == byte(1),
-			Salt:           data[35:67],
-			CredId:         data[67:],
+			RequirePin:   data[34] == byte(1),
+			Salt:         data[35:67],
+			CredId:       data[67:],
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported recipient version %x", format_version)

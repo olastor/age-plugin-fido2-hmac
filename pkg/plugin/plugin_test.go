@@ -24,11 +24,11 @@ func TestRecipientFormat(t *testing.T) {
 		}
 
 		rec := &Fido2HmacRecipient{
-			Version:        2,
+			Version:      2,
 			NativePubKey: NativePubKey,
-			Salt:           salt,
-			CredId:         credId,
-			RequirePin:     requirePin,
+			Salt:         salt,
+			CredId:       credId,
+			RequirePin:   requirePin,
 		}
 
 		rec2, err := ParseFido2HmacRecipient(rec.String())

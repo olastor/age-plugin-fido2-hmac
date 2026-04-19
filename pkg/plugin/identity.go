@@ -44,14 +44,14 @@ func (i *Fido2HmacIdentity) Recipient() (*Fido2HmacRecipient, error) {
 		}
 
 		return &Fido2HmacRecipient{
-			Version:        2,
+			Version:      2,
 			NativePubKey: NativePubKey,
-			RequirePin:     i.RequirePin,
-			Salt:           i.Salt,
-			CredId:         i.CredId,
-			Device:         i.Device,
-			Plugin:         i.Plugin,
-			UI:             i.UI,
+			RequirePin:   i.RequirePin,
+			Salt:         i.Salt,
+			CredId:       i.CredId,
+			Device:       i.Device,
+			Plugin:       i.Plugin,
+			UI:           i.UI,
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported identity version %x", i.Version)
