@@ -1,0 +1,32 @@
+# test post-quantum (MLKEM768X25519) encryption
+# fido key must have pin 1234
+
+# generate with post-quantum flag
+ttyin -stdin yes-pin-yes-identity
+exec age-plugin-fido2-hmac -pq -g
+cp stdout out1
+
+# should have pq recipient (version 3)
+grep -count=1 'age1pq' out1
+! grep 'age1fido2-hmac' out1
+
+exec bash -c 'cat out1 | grep -oP "age1pq.*" > recipient1.txt'
+! stderr .
+exec bash -c 'cat out1 | tail -n1 > identity1.txt'
+! stderr .
+
+exec age -R recipient1.txt -o ciphertext1 plaintext
+! stderr .
+
+ttyin -stdin pin
+exec age -d -o plaintext1 -i identity1.txt ciphertext1
+cmp plaintext plaintext1
+
+-- pin --
+1234
+-- yes-pin-yes-identity --
+1234
+1
+1
+-- plaintext --
+this is the plaintext
