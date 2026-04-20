@@ -250,20 +250,24 @@ func main() {
 			return r, nil
 		})
 		p.HandleIdentityEncodingAsRecipient(func(identity string) (age.Recipient, error) {
-			usePQ := false
-			envPQ := os.Getenv("FIDO2_HMAC_PQ")
-			switch strings.ToLower(envPQ) {
-			case "1", "true", "yes":
-				usePQ = true
-			case "0", "false", "no":
-				usePQ = false
-			default:
-				// env not set or invalid value, ask interactively
-				var err error
-				usePQ, err = p.Confirm("Use post-quantum encryption (MLKEM768X25519)?", "yes", "no")
-				if err != nil {
-					return nil, err
+			shouldUsePQ := func() (bool, error) {
+				usePQ := false
+				envPQ := os.Getenv("FIDO2_HMAC_PQ")
+				switch strings.ToLower(envPQ) {
+				case "1", "true", "yes":
+					usePQ = true
+				case "0", "false", "no":
+					usePQ = false
+				default:
+					// env not set or invalid value, ask interactively
+					var err error
+					usePQ, err = p.Confirm("Use post-quantum encryption (MLKEM768X25519)?", "yes", "no")
+					if err != nil {
+						return false, err
+					}
 				}
+
+				return usePQ, nil
 			}
 
 			if plugin.IsDatalessIdentity(identity) {
@@ -281,6 +285,11 @@ func main() {
 					},
 					WaitTimer: func(name string) {
 					},
+				}
+
+				usePQ, err := shouldUsePQ()
+				if err != nil {
+					return nil, err
 				}
 
 				// even though using a symmetric recipient makes most sense here, the problem is that it
@@ -311,7 +320,13 @@ func main() {
 			}
 
 			i.Plugin = p
-			i.PQ = usePQ
+
+			if i.Version > 1 {
+				i.PQ, err = shouldUsePQ()
+				if err != nil {
+					return nil, err
+				}
+			}
 
 			return i, nil
 		})

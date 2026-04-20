@@ -37,7 +37,7 @@ cmp plaintext plaintext1
 exec age -d -o plaintext2 -i identity2.txt ciphertext2
 cmp plaintext plaintext2
 
-exec age -e -i identity2.txt -o ciphertext3 plaintext
+exec env FIDO2_HMAC_PQ=0 age -e -i identity2.txt -o ciphertext3 plaintext
 ! exec age -d -o plaintext3 -j fido2-hmac ciphertext3
 exec age -d -o plaintext3 -i identity2.txt ciphertext3
 cmp plaintext plaintext3
