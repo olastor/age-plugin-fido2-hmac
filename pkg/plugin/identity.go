@@ -103,7 +103,7 @@ func (i *Fido2HmacIdentity) LoadSecret(pin string) error {
 		unlockPin = pin
 	}
 
-	i.secretKey, err = getHmacSecret(i.Device, i.CredId, i.Salt, unlockPin)
+	i.secretKey, err = i.Device.GetHmacSecret(i.CredId, i.Salt, unlockPin)
 	if err != nil {
 		return err
 	}

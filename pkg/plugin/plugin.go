@@ -12,7 +12,6 @@ import (
 	"filippo.io/age"
 	page "filippo.io/age/plugin"
 	"github.com/olastor/age-plugin-fido2-hmac/internal/bech32"
-	"github.com/olastor/go-libfido2"
 )
 
 var b64 = base64.RawStdEncoding.Strict()
@@ -37,7 +36,7 @@ type Fido2HmacRecipient struct {
 	UI     *page.ClientUI
 
 	// only when the version is 1, the device must be set
-	Device *libfido2.Device
+	Device Fido2Device
 }
 
 type Fido2HmacIdentity struct {
@@ -55,7 +54,7 @@ type Fido2HmacIdentity struct {
 	UI     *page.ClientUI
 
 	Nonce  []byte
-	Device *libfido2.Device
+	Device Fido2Device
 }
 
 // data structure for stanza with parsed args

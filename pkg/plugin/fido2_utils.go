@@ -43,14 +43,18 @@ func listEligibleDevices() ([]*libfido2.Device, error) {
 func FindDevice(
 	timeout time.Duration,
 	displayMessage func(message string) error,
-) (*libfido2.Device, error) {
+) (Fido2Device, error) {
 	devicePathFromEnv := os.Getenv("FIDO2_TOKEN")
 	if devicePathFromEnv != "" {
 		err := displayMessage(fmt.Sprintf("Using device path from env: %s", devicePathFromEnv))
 		if err != nil {
 			return nil, err
 		}
-		return libfido2.NewDevice(devicePathFromEnv)
+		dev, err := libfido2.NewDevice(devicePathFromEnv)
+		if err != nil {
+			return nil, err
+		}
+		return NewLibFido2Device(dev), nil
 	}
 
 	start := time.Now()
@@ -63,14 +67,18 @@ func FindDevice(
 		}
 
 		if len(devs) == 1 {
-			return devs[0], nil
+			return NewLibFido2Device(devs[0]), nil
 		} else if len(devs) > 1 {
 			msg := fmt.Sprintf("Found %d devices. Please touch the one you want to use.", len(devs))
 			err := displayMessage(msg)
 			if err != nil {
 				return nil, err
 			}
-			return libfido2.SelectDevice(devs, 10*time.Second)
+			selected, err := libfido2.SelectDevice(devs, 10*time.Second)
+			if err != nil {
+				return nil, err
+			}
+			return NewLibFido2Device(selected), nil
 		}
 
 		time.Sleep(200 * time.Millisecond)
@@ -79,7 +87,7 @@ func FindDevice(
 	return nil, errors.New("timed out waiting for device")
 }
 
-func HasPinSet(device *libfido2.Device) (bool, error) {
+func hasPinSet(device *libfido2.Device) (bool, error) {
 	info, err := device.Info()
 	if err != nil {
 		return false, err

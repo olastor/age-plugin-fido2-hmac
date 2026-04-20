@@ -30,7 +30,7 @@ func NewCredentials(
 	ui *page.ClientUI,
 	askForIdentity bool,
 ) (result CredentialsResult, err error) {
-	var device *libfido2.Device
+	var device Fido2Device
 
 	displayMessage := func(message string) error {
 		return ui.DisplayMessage(PLUGIN_NAME, message)
@@ -46,7 +46,7 @@ func NewCredentials(
 		return
 	}
 
-	hasPinSet, err := HasPinSet(device)
+	hasPinSet, err := device.HasPinSet()
 	if err != nil {
 		return
 	}
@@ -63,7 +63,7 @@ func NewCredentials(
 	if err != nil {
 		return
 	}
-	credId, err := generateNewCredential(device, pin, algorithm)
+	credId, err := device.GenerateCredential(pin, algorithm)
 	if err != nil {
 		return
 	}
