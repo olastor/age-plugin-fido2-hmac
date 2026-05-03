@@ -8,9 +8,9 @@ require filippo.io/age v1.3.1
 
 require (
 	github.com/olastor/go-libfido2 v0.0.0-20250611191617-da5602ad9fbe
+	github.com/stretchr/testify v1.8.4
 	golang.org/x/crypto v0.45.0
 	golang.org/x/sys v0.38.0
-	golang.org/x/term v0.37.0
 )
 
 require (
@@ -18,5 +18,6 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/stretchr/testify v1.8.4 // indirect
+	golang.org/x/term v0.37.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

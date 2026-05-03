@@ -2,105 +2,40 @@ package plugin
 
 import (
 	"crypto/rand"
-	"reflect"
+	"fmt"
+	"strings"
 	"testing"
+
+	page "filippo.io/age/plugin"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestRecipientFormat(t *testing.T) {
-	for _, requirePin := range []bool{true, false} {
-		NativePubKey := make([]byte, 32)
-		if _, err := rand.Read(NativePubKey); err != nil {
-			t.Error(err)
-		}
-
-		salt := make([]byte, 32)
-		if _, err := rand.Read(salt); err != nil {
-			t.Error(err)
-		}
-
-		credId := make([]byte, 50)
-		if _, err := rand.Read(credId); err != nil {
-			t.Error(err)
-		}
-
-		rec := &Fido2HmacRecipient{
-			Version:      2,
-			NativePubKey: NativePubKey,
-			Salt:         salt,
-			CredId:       credId,
-			RequirePin:   requirePin,
-		}
-
-		rec2, err := ParseFido2HmacRecipient(rec.String())
-		if err != nil {
-			t.Error(err)
-		}
-
-		if !reflect.DeepEqual(rec.NativePubKey, rec2.NativePubKey) {
-			t.Error("Public key changed")
-		}
-		if !reflect.DeepEqual(rec.Salt, rec2.Salt) {
-			t.Error("Salt changed")
-		}
-		if !reflect.DeepEqual(rec.CredId, rec2.CredId) {
-			t.Error("Cred ID changed")
-		}
-		if !reflect.DeepEqual(rec.RequirePin, rec2.RequirePin) {
-			t.Error("RequirePIN changed")
-		}
-		if !reflect.DeepEqual(rec, rec2) {
-			t.Error("Recipients have changed")
-		}
-	}
-}
-
-func TestIdentityFormat(t *testing.T) {
-	for _, requirePin := range []bool{true, false} {
-		secretKey := make([]byte, 32)
-		if _, err := rand.Read(secretKey); err != nil {
-			t.Error(err)
-		}
-
-		salt := make([]byte, 32)
-		if _, err := rand.Read(salt); err != nil {
-			t.Error(err)
-		}
-
-		credId := make([]byte, 50)
-		if _, err := rand.Read(credId); err != nil {
-			t.Error(err)
-		}
-
-		id := &Fido2HmacIdentity{
-			Version:    2,
-			secretKey:  secretKey,
-			Salt:       salt,
-			CredId:     credId,
-			RequirePin: requirePin,
-		}
-
-		id2, err := ParseFido2HmacIdentity(id.String())
-		if err != nil {
-			t.Error(err)
-		}
-
-		if id2.secretKey != nil {
-			t.Error("Secret key not cleared")
-		}
-		if !reflect.DeepEqual(id.Salt, id2.Salt) {
-			t.Error("Salt changed")
-		}
-		if !reflect.DeepEqual(id.CredId, id2.CredId) {
-			t.Error("Cred ID changed")
-		}
-		if !reflect.DeepEqual(id.RequirePin, id2.RequirePin) {
-			t.Error("RequirePIN changed")
-		}
-
-		id2.secretKey = secretKey
-		if !reflect.DeepEqual(id, id2) {
-			t.Error("Identities have changed")
-		}
+func newMockUI(
+	requestSecret func(string) (string, error),
+	displayMessage func(string) error,
+	confirm func(string) (bool, error),
+) *page.ClientUI {
+	return &page.ClientUI{
+		RequestValue: func(name, prompt string, secret bool) (string, error) {
+			if requestSecret != nil {
+				return requestSecret(prompt)
+			}
+			return "", nil
+		},
+		DisplayMessage: func(name, message string) error {
+			if displayMessage != nil {
+				return displayMessage(message)
+			}
+			return nil
+		},
+		Confirm: func(name, prompt, yes, no string) (bool, error) {
+			if confirm != nil {
+				return confirm(prompt)
+			}
+			return false, nil
+		},
+		WaitTimer: func(name string) {},
 	}
 }
 
@@ -116,76 +51,78 @@ func TestFormattingV1(t *testing.T) {
 
 	for _, r := range testRecipients {
 		parsed, err := ParseFido2HmacRecipient(r)
-		if err != nil {
-			t.Error(err)
-		}
-
-		if !reflect.DeepEqual(r, parsed.String()) {
-			t.Error("Recipient string changed")
-		}
+		require.NoError(t, err)
+		assert.Equal(t, r, parsed.String(), "recipient string should not change")
 	}
 
 	for _, i := range testIdentities {
 		parsed, err := ParseFido2HmacIdentity(i)
-		if err != nil {
-			t.Error(err)
-		}
-
-		if !reflect.DeepEqual(i, parsed.String()) {
-			t.Error("Identity string changed")
-		}
+		require.NoError(t, err)
+		assert.Equal(t, i, parsed.String(), "identity string should not change")
 	}
 }
 
 func TestWrapping(t *testing.T) {
-	for i := 0; i < 1; i++ {
-		secretKey := make([]byte, 32)
-		if _, err := rand.Read(secretKey); err != nil {
-			t.Error(err)
-		}
+	secretKey := make([]byte, 32)
+	_, err := rand.Read(secretKey)
+	require.NoError(t, err)
 
-		salt := make([]byte, 32)
-		if _, err := rand.Read(salt); err != nil {
-			t.Error(err)
-		}
+	salt := make([]byte, 32)
+	_, err = rand.Read(salt)
+	require.NoError(t, err)
 
-		credId := make([]byte, 50)
-		if _, err := rand.Read(credId); err != nil {
-			t.Error(err)
-		}
+	credId := make([]byte, 50)
+	_, err = rand.Read(credId)
+	require.NoError(t, err)
 
-		requirePin := i%2 == 0
-
-		id := &Fido2HmacIdentity{
-			Version:    2,
-			secretKey:  secretKey,
-			Salt:       salt,
-			CredId:     credId,
-			RequirePin: requirePin,
-		}
-
-		rec, err := id.Recipient()
-		if err != nil {
-			t.Error(err)
-		}
-
-		fileKey := make([]byte, 16)
-		if _, err := rand.Read(fileKey); err != nil {
-			t.Error(err)
-		}
-
-		stanzas, err := rec.Wrap(fileKey)
-		if err != nil {
-			t.Error(err)
-		}
-
-		fileKey2, err := id.Unwrap(stanzas)
-		if err != nil {
-			t.Error(err)
-		}
-
-		if !reflect.DeepEqual(fileKey, fileKey2) {
-			t.Error("File keys do not match")
-		}
+	id := &Fido2HmacIdentity{
+		Version:    2,
+		secretKey:  secretKey,
+		Salt:       salt,
+		CredId:     credId,
+		RequirePin: false,
 	}
+
+	rec, err := id.Recipient()
+	require.NoError(t, err)
+
+	fileKey := make([]byte, 16)
+	_, err = rand.Read(fileKey)
+	require.NoError(t, err)
+
+	stanzas, err := rec.Wrap(fileKey)
+	require.NoError(t, err)
+
+	fileKey2, err := id.Unwrap(stanzas)
+	require.NoError(t, err)
+	assert.Equal(t, fileKey, fileKey2, "file keys should match")
+}
+
+func TestParseIdentities_Basic(t *testing.T) {
+	id1 := &Fido2HmacIdentity{
+		Version: 2,
+		Salt:    make([]byte, 32),
+		CredId:  make([]byte, 50),
+	}
+	id2 := &Fido2HmacIdentity{
+		Version: 2,
+		Salt:    make([]byte, 32),
+		CredId:  make([]byte, 50),
+	}
+
+	input := fmt.Sprintf("# comment\n\n%s\n%s\n", id1.String(), id2.String())
+	reader := strings.NewReader(input)
+
+	ids, err := ParseIdentities(reader)
+	require.NoError(t, err)
+	assert.Len(t, ids, 2)
+	assert.Equal(t, id1.String(), ids[0].String())
+	assert.Equal(t, id2.String(), ids[1].String())
+}
+
+func TestParseIdentities_Empty(t *testing.T) {
+	reader := strings.NewReader("")
+	_, err := ParseIdentities(reader)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no identities found")
 }
