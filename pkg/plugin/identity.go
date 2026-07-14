@@ -89,13 +89,41 @@ func (i *Fido2HmacIdentity) LoadSecret(pin string) error {
 		return nil
 	}
 
+	// Version-2 identities derive the same native key for every age file. A
+	// command-scoped session may therefore reuse it without asking the token
+	// again. Version 1 deliberately remains uncached because its salt is part of
+	// each encrypted stanza.
+	if i.sessionCache != nil && i.Version == 2 && i.CredId != nil && i.sessionIdentity != "" {
+		secret, err := i.sessionCache.Load(i.sessionIdentity, func() ([]byte, error) {
+			return i.loadSecretFromToken(pin)
+		})
+		if err != nil {
+			return err
+		}
+		i.secretKey = secret
+		return nil
+	}
+
+	secret, err := i.loadSecretFromToken(pin)
+	if err != nil {
+		return err
+	}
+	i.secretKey = secret
+	return nil
+}
+
+func (i *Fido2HmacIdentity) loadSecretFromToken(pin string) ([]byte, error) {
+	if i.Device == nil {
+		return nil, fmt.Errorf("device not specified, cannot obtain secret")
+	}
+
 	if i.RequirePin && pin == "" {
-		return fmt.Errorf("pin required for this identity")
+		return nil, fmt.Errorf("pin required for this identity")
 	}
 
 	err := i.DisplayMessage("Please touch your token...")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	unlockPin := ""
@@ -103,20 +131,23 @@ func (i *Fido2HmacIdentity) LoadSecret(pin string) error {
 		unlockPin = pin
 	}
 
-	i.secretKey, err = i.Device.GetHmacSecret(i.CredId, i.Salt, unlockPin)
+	secret, err := i.Device.GetHmacSecret(i.CredId, i.Salt, unlockPin)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	err = mlock.Mlock(i.secretKey)
+	err = mlock.Mlock(secret)
 	if err != nil {
 		err = i.DisplayMessage(fmt.Sprintf("Warning: Failed to call mlock: %s", err))
 		if err != nil {
-			return err
+			for j := range secret {
+				secret[j] = 0
+			}
+			return nil, err
 		}
 	}
 
-	return nil
+	return secret, nil
 }
 
 // internal method that returns the pin to avoid re-asking it
@@ -422,6 +453,13 @@ func (i *Fido2HmacIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 }
 
 func (i *Fido2HmacIdentity) ClearSecret() {
+	if i.sessionCache != nil && i.sessionIdentity != "" && i.Version == 2 && i.CredId != nil {
+		// The session owns and clears this byte slice. Individual plugin
+		// protocol connections must not zero a value still used by another
+		// connection in the same command.
+		return
+	}
+
 	if i.secretKey != nil {
 		for j := 0; j < cap(i.secretKey); j++ {
 			i.secretKey[j] = 0

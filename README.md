@@ -67,6 +67,7 @@ git clone https://github.com/olastor/age-plugin-fido2-hmac.git
 cd age-plugin-fido2-hmac
 make build
 mv ./age-plugin-fido2-hmac ~/.local/bin/age-plugin-fido2-hmac
+mv ./age-plugin-fido2-hmac-session ~/.local/bin/age-plugin-fido2-hmac-session
 ```
 
 (requires Go 1.22)
@@ -119,6 +120,26 @@ age -d -i identity.txt -o test-decrypted.txt test.txt.enc
 ```
 
 (where `identity.txt` is a file you created putting the `AGE-PLUGIN-FIDO2-HMAC-1QQP...` separated identity you created before.)
+
+### Batch sessions
+
+The `age-plugin-fido2-hmac-session` companion command can wrap a command that
+decrypts several files:
+
+```bash
+age-plugin-fido2-hmac-session -- agenix rekey
+```
+
+For version-2 identities, the first decryption loads the derived identity into
+locked process memory and later plugin processes in the same session reuse it.
+The derived identity and PIN are never written to disk, and the session clears
+the key when the wrapped command exits. One physical touch is still required
+for each distinct identity used by the command. Version-1 and data-less
+identities retain their existing per-file user-presence behavior.
+
+This mode is intentionally command-scoped rather than a persistent agent. Do
+not use it to wrap untrusted commands: any child process in the session can ask
+the broker to decrypt files for the selected identity.
 
 ### Choosing a different algorithm
 

@@ -53,6 +53,12 @@ type Fido2HmacIdentity struct {
 	Plugin *page.Plugin
 	UI     *page.ClientUI
 
+	// sessionCache and sessionIdentity are set only by the command-scoped
+	// session broker. The cache is deliberately limited to version-2
+	// identities, whose HMAC salt is stable across age files.
+	sessionCache    *SessionCache
+	sessionIdentity string
+
 	Nonce  []byte
 	Device Fido2Device
 }

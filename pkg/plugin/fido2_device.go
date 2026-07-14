@@ -54,14 +54,15 @@ func (d *LibFido2Device) Info() (*libfido2.DeviceInfo, error) {
 // MockFido2Device is a mock implementation of Fido2Device for testing.
 // It allows configuring expected responses and simulating various device behaviors.
 type MockFido2Device struct {
-	PinSet           bool
-	HasPinSetErr     error
-	GeneratedCredId  []byte
-	GenerateCredErr  error
-	HmacSecret       []byte
-	GetHmacSecretErr error
-	InfoValue        *libfido2.DeviceInfo
-	InfoErr          error
+	PinSet             bool
+	HasPinSetErr       error
+	GeneratedCredId    []byte
+	GenerateCredErr    error
+	HmacSecret         []byte
+	GetHmacSecretErr   error
+	GetHmacSecretCalls int
+	InfoValue          *libfido2.DeviceInfo
+	InfoErr            error
 }
 
 // HasPinSet returns the configured PIN status for testing.
@@ -76,6 +77,7 @@ func (m *MockFido2Device) GenerateCredential(pin string, algorithm libfido2.Cred
 
 // GetHmacSecret returns a pre-configured HMAC secret for testing.
 func (m *MockFido2Device) GetHmacSecret(credId []byte, salt []byte, pin string) ([]byte, error) {
+	m.GetHmacSecretCalls++
 	return m.HmacSecret, m.GetHmacSecretErr
 }
 

@@ -88,6 +88,10 @@ const USAGE = `Usage:
   age-plugin-fido2-hmac -y [FILE]
   age-plugin-fido2-hmac -m
 
+The companion age-plugin-fido2-hmac-session command can wrap a batch command
+and reuse a version-2 FIDO2 identity for its lifetime. It keeps the derived
+secret in locked memory and clears it when the wrapped command exits.
+
 Options:
     -g, --generate        Generate new credentials interactively.
     -s, --symmetric       Use symmetric encryption and use a new salt for every encryption.
@@ -163,6 +167,19 @@ func main() {
 
 	if helpFlag {
 		flag.Usage()
+		os.Exit(0)
+	}
+
+	if pluginFlag == "identity-v1" && os.Getenv(plugin.SessionSocketEnv) != "" {
+		capability, err := plugin.ParseSessionCapability(os.Getenv(plugin.SessionCapabilityEnv))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "session broker: %s\n", err)
+			os.Exit(1)
+		}
+		if err := plugin.ProxySession(os.Getenv(plugin.SessionSocketEnv), capability); err != nil {
+			fmt.Fprintf(os.Stderr, "session broker: %s\n", err)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 

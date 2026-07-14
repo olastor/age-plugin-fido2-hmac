@@ -91,6 +91,66 @@ func TestLoadSecret_AlreadyLoaded(t *testing.T) {
 	assert.Equal(t, secret, id.secretKey, "secret should remain unchanged when already loaded")
 }
 
+func TestSessionCacheReusesVersion2Secret(t *testing.T) {
+	secret := make([]byte, 32)
+	_, err := rand.Read(secret)
+	require.NoError(t, err)
+
+	mockDevice := &MockFido2Device{HmacSecret: secret}
+	cache := NewSessionCache()
+	defer cache.Close()
+
+	identity := &Fido2HmacIdentity{
+		Version:         2,
+		Salt:            make([]byte, 32),
+		CredId:          make([]byte, 50),
+		Device:          mockDevice,
+		UI:              newMockUI(nil, func(string) error { return nil }, nil),
+		sessionCache:    cache,
+		sessionIdentity: "identity-v2",
+	}
+	secondIdentity := *identity
+	secondIdentity.secretKey = nil
+
+	require.NoError(t, identity.LoadSecret(""))
+	require.NoError(t, secondIdentity.LoadSecret(""))
+	assert.Equal(t, 1, mockDevice.GetHmacSecretCalls)
+	assert.Equal(t, identity.secretKey, secondIdentity.secretKey)
+
+	identity.ClearSecret()
+	assert.True(t, cache.Has("identity-v2"))
+	cache.Close()
+	for i, value := range secondIdentity.secretKey {
+		assert.Zero(t, value, "cached byte %d not cleared", i)
+	}
+}
+
+func TestSessionCacheDoesNotReuseVersion1Secret(t *testing.T) {
+	secret := make([]byte, 32)
+	_, err := rand.Read(secret)
+	require.NoError(t, err)
+
+	mockDevice := &MockFido2Device{HmacSecret: secret}
+	cache := NewSessionCache()
+	defer cache.Close()
+
+	identity := &Fido2HmacIdentity{
+		Version:         1,
+		CredId:          make([]byte, 50),
+		Device:          mockDevice,
+		UI:              newMockUI(nil, func(string) error { return nil }, nil),
+		sessionCache:    cache,
+		sessionIdentity: "identity-v1",
+	}
+	secondIdentity := *identity
+	secondIdentity.secretKey = nil
+
+	require.NoError(t, identity.LoadSecret(""))
+	identity.ClearSecret()
+	require.NoError(t, secondIdentity.LoadSecret(""))
+	assert.Equal(t, 2, mockDevice.GetHmacSecretCalls)
+}
+
 func TestLoadSecret_PinRequiredButMissing(t *testing.T) {
 	mockDevice := &MockFido2Device{}
 
