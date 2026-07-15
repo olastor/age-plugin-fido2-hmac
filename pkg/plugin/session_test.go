@@ -1,12 +1,40 @@
 package plugin
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestIdentityForSessionAttachesCachedSecret(t *testing.T) {
+	cache := NewSessionCache()
+	defer cache.Close()
+
+	encoded := (&Fido2HmacIdentity{
+		Version: 2,
+		Salt:    make([]byte, 32),
+		CredId:  make([]byte, 50),
+	}).String()
+	want := bytes.Repeat([]byte{0x42}, 32)
+	if _, err := cache.Load(encoded, func() ([]byte, error) { return want, nil }); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	server := &SessionServer{cache: cache}
+	identity, err := server.identityForSession(encoded, nil)
+	if err != nil {
+		t.Fatalf("identityForSession: %v", err)
+	}
+	if !bytes.Equal(identity.secretKey, want) {
+		t.Fatal("identity did not receive the cached secret")
+	}
+	if err := identity.LoadSecret(""); err != nil {
+		t.Fatalf("cached identity tried to use a device: %v", err)
+	}
+}
 
 func TestNewSessionServerRejectsNonSocketPath(t *testing.T) {
 	dir := t.TempDir()

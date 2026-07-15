@@ -33,14 +33,22 @@ func NewSessionCache() *SessionCache {
 
 // Has reports whether key has already been loaded in this session.
 func (c *SessionCache) Has(key string) bool {
+	_, ok := c.Get(key)
+	return ok
+}
+
+// Get returns a cached secret without transferring ownership to the caller.
+// The returned slice remains owned by the cache and is cleared when the
+// command-scoped session closes.
+func (c *SessionCache) Get(key string) ([]byte, bool) {
 	if c == nil || key == "" {
-		return false
+		return nil, false
 	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	_, ok := c.entries[key]
-	return ok && !c.closed
+	secret, ok := c.entries[key]
+	return secret, ok && !c.closed
 }
 
 // Load returns the cached value or calls load exactly once for concurrent

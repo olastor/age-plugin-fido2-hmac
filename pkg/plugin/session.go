@@ -146,32 +146,38 @@ func (s *SessionServer) serveConnection(conn net.Conn) error {
 	}
 	p.SetIO(conn, conn, os.Stderr)
 	p.HandleIdentityEncoding(func(identity string) (age.Identity, error) {
-		i, err := ParseFido2HmacIdentity(identity)
-		if err != nil {
-			return nil, err
-		}
-
-		i.sessionCache = s.cache
-		i.sessionIdentity = identity
-		i.Plugin = p
-
-		// A cache hit does not require a live token device. This matters when a
-		// user removes the token after authorizing the batch.
-		if s.cache.Has(identity) {
-			return i, nil
-		}
-
-		i.Device, err = FindDevice(50*time.Second, p.DisplayMessage)
-		if err != nil {
-			return nil, err
-		}
-		return i, nil
+		return s.identityForSession(identity, p)
 	})
 
 	if exitCode := p.IdentityV1(); exitCode != 0 {
 		return fmt.Errorf("identity-v1 handler exited with status %d", exitCode)
 	}
 	return nil
+}
+
+func (s *SessionServer) identityForSession(identity string, p *page.Plugin) (*Fido2HmacIdentity, error) {
+	i, err := ParseFido2HmacIdentity(identity)
+	if err != nil {
+		return nil, err
+	}
+
+	i.sessionCache = s.cache
+	i.sessionIdentity = identity
+	i.Plugin = p
+
+	// Attach the cached secret immediately. Besides avoiding a second token
+	// lookup, this keeps every unwrap path independent of a live device after
+	// the first authorization.
+	if secret, ok := s.cache.Get(identity); ok {
+		i.secretKey = secret
+		return i, nil
+	}
+
+	i.Device, err = FindDevice(50*time.Second, p.DisplayMessage)
+	if err != nil {
+		return nil, err
+	}
+	return i, nil
 }
 
 func authenticateSession(conn net.Conn, expected []byte) error {
